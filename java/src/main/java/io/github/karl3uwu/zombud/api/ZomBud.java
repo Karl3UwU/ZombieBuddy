@@ -83,6 +83,43 @@ public class ZomBud {
         return tbl;
     }
 
+    /** Lua: {@code KRLZomBud.isSessionMode()}: the game was started by a launcher with a session file. */
+    public static boolean isSessionMode() {
+        return io.github.karl3uwu.zombud.SessionLoader.isSessionMode();
+    }
+
+    /**
+     * Lua: {@code KRLZomBud.getSession()}. nil outside session mode or when the file couldn't be used; otherwise
+     * a table with id, gameBuild, safeMode, error (string or nil), intent {kind, save, server, address} and mods
+     * (list of ids). The intent is recorded only; nothing acts on it yet.
+     */
+    public static KahluaTable getSession() {
+        var s = io.github.karl3uwu.zombud.SessionLoader.session();
+        if (s == null) return null;
+        var t = LuaManager.platform.newTable();
+        t.rawset("id", s.id());
+        t.rawset("gameBuild", s.gameBuild());
+        t.rawset("safeMode", s.safeMode());
+        String error = io.github.karl3uwu.zombud.SessionLoader.sessionError();
+        if (error != null) t.rawset("error", error);
+        var intent = LuaManager.platform.newTable();
+        intent.rawset("kind", s.intent().kind().name().toLowerCase(java.util.Locale.ROOT));
+        if (s.intent().save() != null) intent.rawset("save", s.intent().save());
+        if (s.intent().server() != null) intent.rawset("server", s.intent().server());
+        if (s.intent().address() != null) intent.rawset("address", s.intent().address());
+        t.rawset("intent", intent);
+        var mods = LuaManager.platform.newTable();
+        int i = 1;
+        for (String id : s.modIds()) mods.rawset(Double.valueOf(i++), id);
+        t.rawset("mods", mods);
+        return t;
+    }
+
+    /** Lua: {@code KRLZomBud.markSessionStage("main-menu" | "in-game")}; other names are ignored. */
+    public static void markSessionStage(String stage) {
+        io.github.karl3uwu.zombud.SessionLoader.markStageFromLua(stage);
+    }
+
     // lua-facing variant of Loader.getActiveJavaMods(). Returns a list of modIds for JARs that were loaded this run.
     public static KahluaTable getActiveJavaMods() {
         var tbl = LuaManager.platform.newTable();

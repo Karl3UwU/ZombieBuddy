@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "s1",
+  "created": "2026-11-28T02:00:00+01:00",
+  "gameBuild": "42.22.2",
+  "loaderVersion": "3.0.0-beta3",
+  "intent": { "kind": "new" },
+  "mods": [],
+  "safeMode": true,
+  "coreFixes": { "enabled": false },
+  "stageFile": "/home/player/.krl_zombud/sessions/s1.stage",
+  "reportDir": "/home/player/.krl_zombud/sessions"
+}

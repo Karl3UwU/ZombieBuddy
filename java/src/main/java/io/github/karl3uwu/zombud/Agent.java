@@ -160,7 +160,10 @@ public class Agent {
         Logger.debug("Agent  classloader: " + Agent.class.getClassLoader());
         Logger.debug("ZB     classloader: " + ZomBud.class.getClassLoader());
 
-        Loader.preloadMods();
+        // Session mode (launcher session file) replaces the preload list and the in-game Java loading path.
+        if (!SessionLoader.premain(LoaderContext.current())) {
+            Loader.preloadMods();
+        }
         LoaderContext.current().patchReport().publish();
         Reflect.clearCaches();
     }

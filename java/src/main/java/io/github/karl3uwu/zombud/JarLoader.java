@@ -216,6 +216,13 @@ final class JarLoader {
             return false;
         }
 
+        // PREMAIN: install the patches before running PreMain, so game classes that PreMain (or anything it calls)
+        // touches are woven when first defined instead of being retransformed. MAIN keeps the old order.
+        boolean patchesFirst = phase == Loader.Phase.PREMAIN;
+        if (firstPhase && patchesFirst) {
+            installPatches(lc, jarPath, packageName, modLoader, transformed, skipPatches);
+        }
+
         // Load and invoke optional [Pre]Main class
         String mainClassName = phase == Loader.Phase.PREMAIN ? transformed.preMainClassName() : transformed.mainClassName();
         if (mainClassName == null) {
@@ -231,13 +238,18 @@ final class JarLoader {
         }
 
         // only apply patches on the first phase that loads this package
-        if (firstPhase) {
-            Exposer.exposeClassesFromPackage(modLoader, transformed.classes().keySet(), packageName);
-            String modId = modIdFor(lc, jarPath, packageName);
-            registerDelegations(lc, modId, modLoader, transformed.patches(), skipPatches);
-            PatchEngine.applyPatches(transformed.patches(), modLoader, transformed, skipPatches, modId, jarPath.toString());
+        if (firstPhase && !patchesFirst) {
+            installPatches(lc, jarPath, packageName, modLoader, transformed, skipPatches);
         }
         return true;
+    }
+
+    private static void installPatches(LoaderContext lc, Path jarPath, String packageName, ClassLoader modLoader,
+                                       TransformedJar transformed, Set<String> skipPatches) {
+        Exposer.exposeClassesFromPackage(modLoader, transformed.classes().keySet(), packageName);
+        String modId = modIdFor(lc, jarPath, packageName);
+        registerDelegations(lc, modId, modLoader, transformed.patches(), skipPatches);
+        PatchEngine.applyPatches(transformed.patches(), modLoader, transformed, skipPatches, modId, jarPath.toString());
     }
 
     static String modIdFor(LoaderContext lc, Path jarPath, String packageName) {

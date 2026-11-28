@@ -42,6 +42,18 @@ final class PatchChecker {
         AMBIGUOUS(false),
         /** The dry run could not complete for a reason unrelated to the patch (e.g. a type it references can't be read). Warning only. */
         CHECK_INCONCLUSIVE(false),
+        /** Session mode: the session file can't be used, or the game build differs. All Java mods stay off. */
+        SESSION_ERROR(true),
+        /** Session mode: the game build differs from the one the session was prepared for. */
+        BUILD_MISMATCH(true),
+        /** Session mode: a jar listed in the session doesn't exist. */
+        JAR_MISSING(true),
+        /** Session mode: the jar's sha256 differs from the session (changed since the launcher checked it). */
+        SHA256_MISMATCH(true),
+        /** Session mode: the jar is not approved; there is no prompt in session mode. */
+        NOT_APPROVED(true),
+        /** Session mode: the jar's .zbs signature check failed. */
+        SIGNATURE_BLOCKED(true),
         /** Error reported by the agent while transforming the class (after the checks passed). */
         TRANSFORM_ERROR(true);
 

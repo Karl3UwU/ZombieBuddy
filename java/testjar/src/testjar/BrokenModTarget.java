@@ -5,6 +5,7 @@ public class BrokenModTarget {
     public static boolean missingModPreMainCalled;
     public static boolean argTypeModPreMainCalled;
     public static boolean optionalModPreMainCalled;
+    public static int optionalModMainCalls;
 
     public static int valueA() { return 1; }
     public static int valueB() { return 2; }
