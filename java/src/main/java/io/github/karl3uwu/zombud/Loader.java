@@ -97,11 +97,30 @@ public class Loader {
     // ---- game hooks (Patch_ZomboidFileSystem, Patch_GameWindow) ---------------------------------------------
 
     public static void maybeReorderMods(List<String> mods) {
+        if (LoaderContext.current().session != null) {
+            return; // the launcher chose the order
+        }
         ModListLoader.maybeReorderMods(mods);
     }
 
     public static void loadMods(List<String> mods) {
+        if (LoaderContext.current().sessionRequested) {
+            SessionLoader.onLoadMods(); // jars were loaded at premain; never a second time here
+            return;
+        }
         ModListLoader.loadMods(mods);
+    }
+
+    /** The list {@code ZomboidFileSystem.loadMods(List)} should use: the session's in session mode. */
+    public static List<String> modListFor(List<String> gameList) {
+        return SessionLoader.modListFor(gameList);
+    }
+
+    /** {@code ZomboidFileSystem.loadMods(List)} returned. */
+    public static void afterLoadMods() {
+        if (LoaderContext.current().sessionRequested) {
+            SessionLoader.afterLoadMods();
+        }
     }
 
     public static void onEnterLoadMods(String activeMods) {

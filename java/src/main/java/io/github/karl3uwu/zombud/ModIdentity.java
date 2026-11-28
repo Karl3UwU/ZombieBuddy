@@ -36,6 +36,12 @@ public final class ModIdentity {
     /** ZombieBuddy's name for {@link #ENV_VERBOSITY}; no longer read, only warned about. */
     public static final String LEGACY_ENV_VERBOSITY = "ZB_VERBOSITY";
 
+    /** Our own package (running as the agent) and upstream ZombieBuddy's are never loaded as a mod's Java side. */
+    public static boolean isNeverLoadedAsMod(String javaPkgName) {
+        return javaPkgName != null
+            && (javaPkgName.equals(ModIdentity.class.getPackageName()) || javaPkgName.equals(LEGACY_JAVA_PKG));
+    }
+
     public static boolean isLegacyModId(String modId) {
         return modId != null && modId.trim().equals(LEGACY_MOD_ID);
     }

@@ -130,6 +130,36 @@ public final class LoaderContext {
         return patchReport;
     }
 
+    // ---- session mode (launcher session file, see SessionLoader) -----------------------------------------------
+
+    /** {@code -Dkrl.session} or {@code KRL_SESSION} was given: the in-game Java loading path is off. */
+    volatile boolean sessionRequested;
+    volatile Path sessionPath;
+    /** The parsed session; null when none was requested or it couldn't be used. */
+    volatile io.github.karl3uwu.zombud.session.Session session;
+    /** Why session mode runs without Java mods (bad file, build mismatch); null when it doesn't. */
+    volatile String sessionError;
+    volatile Path stageFile;
+    /** Where patch-report.json goes; null means the config dir. */
+    volatile Path reportDir;
+    /** Game build read at premain from Core.class bytes; null when the shape wasn't recognised. */
+    volatile String premainGameBuild;
+    /** Jars loaded at premain in session mode, in session order. */
+    final List<SessionLoader.LoadedJar> sessionJars = new java.util.concurrent.CopyOnWriteArrayList<>();
+    final Set<String> stagesWritten = ConcurrentHashMap.newKeySet();
+
+    /** Classes patched when first defined (no retransformation), and classes retransformed after loading. */
+    final Set<String> firstLoadClasses = ConcurrentHashMap.newKeySet();
+    final Set<String> retransformedClasses = ConcurrentHashMap.newKeySet();
+
+    public Set<String> firstLoadClasses() {
+        return Set.copyOf(firstLoadClasses);
+    }
+
+    public Set<String> retransformedClasses() {
+        return Set.copyOf(retransformedClasses);
+    }
+
     /** Classes already redefined by {@link PatchTransformer}, by name. */
     final Map<String, Class<?>> transformedClasses = new ConcurrentHashMap<>();
 

@@ -512,6 +512,7 @@ public final class PatchEngine {
                                          boolean loaded,
                                          net.bytebuddy.dynamic.DynamicType dt) {
                 Logger.info("Transformed: " + td.getName() + (loaded ? " (retransformed)" : " (new load)"));
+                (loaded ? LoaderContext.current().retransformedClasses : LoaderContext.current().firstLoadClasses).add(td.getName());
             }
 
             @Override

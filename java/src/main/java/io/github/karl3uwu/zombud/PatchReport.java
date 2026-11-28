@@ -33,6 +33,8 @@ public final class PatchReport {
         WARNING,
         /** Reported after the fact: the class was already being loaded, so it stayed unpatched by this mod. */
         CLASS_UNPATCHED,
+        /** Session mode: no Java mod was loaded (bad session file, wrong game build, safe mode). */
+        ALL_JAVA_MODS_OFF,
     }
 
     public record Entry(
@@ -95,6 +97,7 @@ public final class PatchReport {
             case PATCH_SKIPPED -> "patch skipped";
             case WARNING -> "warning only";
             case CLASS_UNPATCHED -> "class left unpatched by this mod";
+            case ALL_JAVA_MODS_OFF -> "no Java mods loaded";
         };
     }
 
@@ -114,6 +117,16 @@ public final class PatchReport {
         root.put("gameBuild", gameBuild());
         root.put("timestamp", Instant.now().toString());
         root.put("disabledMods", disabledMods());
+        LoaderContext lc = LoaderContext.current();
+        if (lc.sessionRequested) {
+            Map<String, Object> s = new LinkedHashMap<>();
+            s.put("file", lc.sessionPath != null ? lc.sessionPath.toString() : null);
+            s.put("id", lc.session != null ? lc.session.id() : null);
+            s.put("safeMode", lc.session != null && lc.session.safeMode());
+            s.put("error", lc.sessionError);
+            s.put("javaModsLoaded", lc.sessionJars.size());
+            root.put("session", s);
+        }
         List<Map<String, Object>> list = new ArrayList<>();
         for (Entry e : entries()) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -148,7 +161,8 @@ public final class PatchReport {
 
     /** Writes the report and, when mods were turned off, shows the summary in game. Called after each load step. */
     public void publish() {
-        writeTo(Agent.configDir());
+        Path dir = LoaderContext.current().reportDir;
+        writeTo(dir != null ? dir : Agent.configDir());
         String summary = summaryLine();
         if (summary != null) {
             Logger.error(summary);
@@ -159,12 +173,14 @@ public final class PatchReport {
     /** Game version when the game's Core class is already loaded; never loads game classes itself. */
     private static String gameBuild() {
         try {
+            String fromPremain = LoaderContext.current().premainGameBuild;
+            if (fromPremain != null) return fromPremain;
             var inst = LoaderContext.current().instrumentation;
             if (inst == null) return "unknown";
             for (Class<?> c : inst.getAllLoadedClasses()) {
                 if ("zombie.core.Core".equals(c.getName())) {
                     Object core = c.getMethod("getInstance").invoke(null);
-                    Object v = core != null ? c.getMethod("getVersion").invoke(core) : null;
+                    Object v = core != null ? c.getMethod("getGameAndBuildVersion").invoke(core) : null;
                     return v != null ? v.toString() : "unknown";
                 }
             }

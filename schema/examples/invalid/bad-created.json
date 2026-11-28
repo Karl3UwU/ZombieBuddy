@@ -1,0 +1,1 @@
+{ "schema": 1, "id": "x", "created": "yesterday", "gameBuild": "42.22.2", "loaderVersion": "3.0.0-beta3", "intent": { "kind": "new" }, "mods": [], "safeMode": false, "coreFixes": { "enabled": true }, "stageFile": "/tmp/s.stage", "reportDir": "/tmp" }

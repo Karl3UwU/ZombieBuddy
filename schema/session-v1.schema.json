@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Karl3UwU/KRL-ZomBud/schema/session-v1.schema.json",
+  "title": "KRL ZomBud session file, version 1",
+  "description": "One game launch prepared by a launcher. See doc/SessionFile.md. Unknown properties are allowed and ignored by the loader.",
+  "type": "object",
+  "required": ["schema", "id", "created", "gameBuild", "loaderVersion", "intent", "mods", "safeMode", "coreFixes", "stageFile", "reportDir"],
+  "properties": {
+    "schema": { "const": 1 },
+    "id": { "$ref": "#/$defs/nonEmpty", "description": "Launcher-chosen session id, e.g. a UUID." },
+    "created": { "type": "string", "format": "date-time", "description": "RFC 3339 date-time." },
+    "gameBuild": { "$ref": "#/$defs/nonEmpty", "description": "Game build the session was prepared for, as Core.getGameAndBuildVersion() reports it, e.g. \"42.22.2\"." },
+    "loaderVersion": { "$ref": "#/$defs/nonEmpty", "description": "KRL ZomBud version the launcher expects. Informational." },
+    "intent": { "$ref": "#/$defs/intent" },
+    "mods": {
+      "type": "array",
+      "description": "Mods in load order.",
+      "items": { "$ref": "#/$defs/mod" }
+    },
+    "safeMode": { "type": "boolean", "description": "true: Lua mods load, Java mods don't, core fixes are off." },
+    "coreFixes": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "overrides": {
+          "type": "object",
+          "additionalProperties": { "type": "boolean" },
+          "description": "fixId -> on/off, overriding enabled for that fix."
+        }
+      }
+    },
+    "stageFile": { "$ref": "#/$defs/absPath", "description": "File the loader appends \"<ISO time> <stage>\" lines to." },
+    "reportDir": { "$ref": "#/$defs/absPath", "description": "Directory for patch-report.json." }
+  },
+  "$defs": {
+    "nonEmpty": { "type": "string", "minLength": 1, "pattern": "\\S" },
+    "absPath": {
+      "type": "string",
+      "description": "Absolute path, POSIX (/...) or Windows (C:\\..., C:/..., \\\\server\\...).",
+      "pattern": "^(/|[A-Za-z]:[\\\\/]|\\\\\\\\)"
+    },
+    "intent": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["continue", "host", "new", "join"] },
+        "save": { "type": "string", "description": "Save to continue (kind continue)." },
+        "server": { "type": "string", "description": "Server settings name to host (kind host)." },
+        "address": { "type": "string", "description": "host:port to join (kind join)." }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "continue" } } }, "then": { "required": ["save"], "properties": { "save": { "$ref": "#/$defs/nonEmpty" } } } },
+        { "if": { "properties": { "kind": { "const": "host" } } }, "then": { "required": ["server"], "properties": { "server": { "$ref": "#/$defs/nonEmpty" } } } },
+        { "if": { "properties": { "kind": { "const": "join" } } }, "then": { "required": ["address"], "properties": { "address": { "$ref": "#/$defs/nonEmpty" } } } }
+      ]
+    },
+    "mod": {
+      "type": "object",
+      "required": ["id", "dir"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^\\\\*\\s*\\S",
+          "description": "Mod id. A leading backslash (mod.info require= style) is allowed and dropped. Ids must be unique."
+        },
+        "workshopId": { "type": "integer", "minimum": 1 },
+        "dir": { "$ref": "#/$defs/absPath", "description": "Mod folder for the chosen build (the folder holding mod.info)." },
+        "java": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["jar", "sha256", "pkg"],
+            "properties": {
+              "jar": { "$ref": "#/$defs/absPath" },
+              "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+              "pkg": { "type": "string", "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*$", "description": "javaPkgName from mod.info." }
+            }
+          }
+        }
+      }
+    }
+  }
+}
