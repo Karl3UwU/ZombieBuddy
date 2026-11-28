@@ -296,6 +296,15 @@ sourceSets {
         // testpatches needs access to testjar classes for CustomObject
         compileClasspath += testjar.output
     }
+    // Deliberately broken test mods (one jar per package), loaded by test_patched next to testpatches
+    testbroken {
+        java {
+            srcDirs = ['testbroken']
+            include '**/*.java'
+        }
+        compileClasspath += main.output
+        compileClasspath += testjar.output
+    }
 }
 
 // Copy native DLL to build/libs
@@ -481,6 +490,17 @@ task testpatchesJar(type: Jar) {
     dependsOn compileTestpatchesJava
 }
 
+// One jar per broken test mod: a mod is a jar, and a failed required patch turns off the whole jar.
+['missing', 'argtype', 'optional'].each { mod ->
+    tasks.register("testbroken${mod.capitalize()}Jar", Jar) {
+        archiveBaseName.set("testbroken-${mod}")
+        from(sourceSets.testbroken.output) {
+            include "io/github/karl3uwu/zombud/testbroken/${mod}/**"
+        }
+        dependsOn compileTestbrokenJava
+    }
+}
+
 // Add testjar JAR as test dependency
 dependencies {
     testImplementation files(tasks.named('testJar'))
@@ -548,6 +568,7 @@ task test_patched(type: Test) {
     useJUnitPlatform()
     dependsOn testJar
     dependsOn testpatchesJar
+    dependsOn 'testbrokenMissingJar', 'testbrokenArgtypeJar', 'testbrokenOptionalJar'
     dependsOn shadowJar  // Fat shaded KRLZomBud.jar (javaagent)
 
     // Use testPatched source set
@@ -558,6 +579,11 @@ task test_patched(type: Test) {
     // Format: <path>:<package_name>
     def patchesJarPath = testpatchesJar.archiveFile.get().asFile.absolutePath
     def patchesPackageName = "io.github.karl3uwu.zombud.testpatches"
+    // Deliberately broken mods (see testbroken/): each is its own jar = its own mod
+    def brokenJars = ['missing', 'argtype', 'optional'].collect { mod ->
+        def jarFile = tasks.named("testbroken${mod.capitalize()}Jar").get().archiveFile.get().asFile.absolutePath
+        "${jarFile}:io.github.karl3uwu.zombud.testbroken.${mod}"
+    }.join(';')
 
     // Gson must be on the bootstrap classpath so it is visible when premain() runs.
     // Deferred to doFirst so the configuration is fully resolved before we iterate.
@@ -567,7 +593,7 @@ task test_patched(type: Test) {
         def bcJar = configurations.runtimeClasspath.find { it.name.contains("bcprov") }
         if (!bcJar) throw new GradleException("bouncycastle jar not found in runtimeClasspath")
         jvmArgs "-Xbootclasspath/a:${gsonJar}${File.pathSeparator}${bcJar}"
-        jvmArgs "-javaagent:${shadowJar.archiveFile.get().asFile.absolutePath}=patches_jar=${patchesJarPath}:${patchesPackageName},config_dir=.config,prop_prefix=krl"
+        jvmArgs "-javaagent:${shadowJar.archiveFile.get().asFile.absolutePath}=patches_jar=${patchesJarPath}:${patchesPackageName};${brokenJars},config_dir=.config,prop_prefix=krl"
     }
 }
 
