@@ -28,12 +28,19 @@ folder that contains `Project Zomboid.app`; the build finds the jar inside the b
 ```powershell
 cd java
 .\gradlew shadowJar                          # KRLZomBud.jar -> java\build\jdk25\libs\
-.\gradlew unitTest test_vanilla test_patched # all three test suites
+.\gradlew unitTest test_vanilla test_patched # the three main test suites
+.\gradlew test_sessions                      # session-mode agent tests
 ```
 
 - `unitTest`: plain unit tests.
 - `test_vanilla`: runs without the agent.
-- `test_patched`: runs with the built jar attached as a Java agent and applies the patches in `testpatches/`.
+- `test_patched`: runs with the built jar attached as a Java agent and applies the patches in `testpatches/`, plus
+  the deliberately broken mods in `testbroken/`.
+- `test_sessions`: four short JVM runs with a launcher session file (normal, safe mode, corrupt file, missing file).
+  The session files are made by the real `session create` CLI from mod folders built around the `testbroken` jars.
+
+The launcher session file format, the agent's session mode and the `session create/validate` CLI are described in
+[SessionFile.md](SessionFile.md).
 
 ### What CI checks, and what it doesn't
 

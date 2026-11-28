@@ -249,3 +249,4 @@ Windows example:
 | Variable | Description |
 |----------|-------------|
 | `KRL_VERBOSITY` | Sets verbosity level (overrides command-line `verbosity` parameter). Replaces ZombieBuddy's `ZB_VERBOSITY`, which is no longer read. |
+| `KRL_SESSION` | Path of a launcher session file (same as `-Dkrl.session=<path>`, which wins). See [SessionFile.md](SessionFile.md). |
