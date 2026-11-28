@@ -8,14 +8,13 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class DirHider {
-    private static boolean g_enabled = true;
 
     public static void setEnabled(boolean enabled) {
-        g_enabled = enabled;
+        LoaderContext.current().dirHiderEnabled = enabled;
     }
 
     public static boolean isEnabled() {
-        return g_enabled;
+        return LoaderContext.current().dirHiderEnabled;
     }
 
     private static final Set<String> canonHideNames = new HashSet<>(Arrays.asList(
@@ -61,18 +60,18 @@ public class DirHider {
     }
 
     public static boolean shouldHide(File file) {
-        return g_enabled && (file != null) && shouldHidePath(file.toPath(), CMP_MODE.ANY);
+        return LoaderContext.current().dirHiderEnabled && (file != null) && shouldHidePath(file.toPath(), CMP_MODE.ANY);
     }
 
     public static boolean shouldHide(File base, String relPath) {
-        if (!g_enabled) return false;
+        if (!LoaderContext.current().dirHiderEnabled) return false;
         if (base != null && shouldHidePath(base.toPath(), CMP_MODE.LAST)) return true;
         if (relPath != null && shouldHidePath(Path.of(relPath), CMP_MODE.FIRST)) return true;
         return false;   
     }
 
     public static boolean shouldHide(URI base, File relPath) {
-        if (!g_enabled) return false;
+        if (!LoaderContext.current().dirHiderEnabled) return false;
         if (base != null && shouldHidePath(Path.of(base), CMP_MODE.LAST)) return true;
         if (relPath != null && shouldHidePath(relPath.toPath(), CMP_MODE.FIRST)) return true;
         return false;

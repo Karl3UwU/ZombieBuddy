@@ -37,17 +37,14 @@ public final class Watermark {
     private static final float YELLOW_B = 0.0f;
     private static final float GRAY     = 0.9f;
 
-    private static final float DEFAULT_ALPHA = 0.4f;
-    private static final int DEFAULT_TTL   = 200;
+    static final float DEFAULT_ALPHA = 0.4f;
+    static final int DEFAULT_TTL   = 200;
     private static final int FADE_DURATION = 10;
 
     private static Texture icon;
     private static boolean iconLoadAttempted;
 
     private static boolean _in_init = true;
-    private static int _ttl         = DEFAULT_TTL;
-    private static float _alpha     = DEFAULT_ALPHA;
-    private static String _midLine  = null;
 
     private Watermark() {}
 
@@ -57,30 +54,30 @@ public final class Watermark {
     }
 
     static void setMidLine(String text) {
-        _midLine = text;
+        LoaderContext.current().watermarkMidLine = text;
     }
 
     public static void setAlpha(float alpha) {
-        _alpha = alpha;
+        LoaderContext.current().watermarkAlpha = alpha;
     }
 
     public static void maybeDraw() {
         if (isEnabled()) {
             draw();
-        } else if (_ttl > 0) {
-            if (_ttl > FADE_DURATION && isIngameState()) {
+        } else if (LoaderContext.current().watermarkTtl > 0) {
+            if (LoaderContext.current().watermarkTtl > FADE_DURATION && isIngameState()) {
                 // fade immediately on game start
-                _ttl = FADE_DURATION;
+                LoaderContext.current().watermarkTtl = FADE_DURATION;
             }
-            _ttl--;
+            LoaderContext.current().watermarkTtl--;
             draw();
         }
     }
 
     private static float getCurrentAlpha() {
-        float alpha = _alpha;
-        if (!isEnabled() && _ttl < FADE_DURATION) {
-            alpha *= _ttl / (float)FADE_DURATION;
+        float alpha = LoaderContext.current().watermarkAlpha;
+        if (!isEnabled() && LoaderContext.current().watermarkTtl < FADE_DURATION) {
+            alpha *= LoaderContext.current().watermarkTtl / (float)FADE_DURATION;
         }
         return alpha;
     }
@@ -146,8 +143,8 @@ public final class Watermark {
         }
         textY += textH;
 
-        if (!Utils.isBlank(_midLine)) {
-            drawYellow(font, textMgr, textX, textY, _midLine);
+        if (!Utils.isBlank(LoaderContext.current().watermarkMidLine)) {
+            drawYellow(font, textMgr, textX, textY, LoaderContext.current().watermarkMidLine);
             textY += textH;
         }
 

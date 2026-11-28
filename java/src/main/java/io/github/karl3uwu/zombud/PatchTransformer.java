@@ -29,7 +29,6 @@ import net.bytebuddy.dynamic.loading.ByteArrayClassLoader;
 final class PatchTransformer {
     private static final ThreadLocal<String>      g_transformingClass  = new ThreadLocal<>();
     private static final ThreadLocal<ClassLoader> g_transformingLoader = new ThreadLocal<>();
-    private static final ConcurrentHashMap<String, Class<?>> g_transformedClasses = new ConcurrentHashMap<>();
 
     private interface IMemberHandle {
         String targetClass();
@@ -112,13 +111,13 @@ final class PatchTransformer {
 
     private static Class<?> ensureTransformed(Class<?> patchClass) {
         String className = patchClass.getName();
-        Class<?> cached = g_transformedClasses.get(className);
+        Class<?> cached = LoaderContext.current().transformedClasses.get(className);
         if (cached != null) {
             return cached;
         }
 
         synchronized (("patch-transform:" + className).intern()) {
-            cached = g_transformedClasses.get(className);
+            cached = LoaderContext.current().transformedClasses.get(className);
             if (cached != null) {
                 return cached;
             }
@@ -133,7 +132,7 @@ final class PatchTransformer {
                 transformedBytes = Pipeline.patchLoad().transformClass(className, classBytes, jctx);
             } catch (Exception e) {
                 Logger.error("Failed to transform patch class " + className + ": " + e.getMessage());
-                if (Loader.g_verbosity > 0) {
+                if (LoaderContext.current().verbosity > 0) {
                     Logger.printStackTrace(e);
                 }
 
@@ -141,13 +140,13 @@ final class PatchTransformer {
             }
 
             if (Arrays.equals(classBytes, transformedBytes)) {
-                g_transformedClasses.put(className, patchClass);
+                LoaderContext.current().transformedClasses.put(className, patchClass);
                 return patchClass;
             }
 
             try {
-                if (Loader.g_instrumentation != null) {
-                    Loader.g_instrumentation.redefineClasses(new ClassDefinition(patchClass, transformedBytes));
+                if (LoaderContext.current().instrumentation != null) {
+                    LoaderContext.current().instrumentation.redefineClasses(new ClassDefinition(patchClass, transformedBytes));
                 }
             } catch (Exception e) {
                 Logger.debug("Could not redefine patch class " + className + " (non-fatal): " + e.getMessage());
@@ -159,11 +158,11 @@ final class PatchTransformer {
                         Map.of(className, transformedBytes),
                         ByteArrayClassLoader.PersistenceHandler.MANIFEST);
                 Class<?> freshClass = freshLoader.loadClass(className);
-                g_transformedClasses.put(className, freshClass);
+                LoaderContext.current().transformedClasses.put(className, freshClass);
                 return freshClass;
             } catch (Exception e) {
                 Logger.error("Failed to load transformed patch class " + className + ": " + e.getMessage());
-                if (Loader.g_verbosity > 0) {
+                if (LoaderContext.current().verbosity > 0) {
                     Logger.printStackTrace(e);
                 }
 

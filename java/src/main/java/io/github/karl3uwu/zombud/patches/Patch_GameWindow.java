@@ -1,7 +1,7 @@
 package io.github.karl3uwu.zombud.patches;
 
 import io.github.karl3uwu.zombud.api.Callbacks;
-import io.github.karl3uwu.zombud.Loader;
+import io.github.karl3uwu.zombud.LoaderContext;
 import io.github.karl3uwu.zombud.api.Patch;
 
 public class Patch_GameWindow {
@@ -17,7 +17,7 @@ public class Patch_GameWindow {
     public static class Patch_DoLoadingText {
         @Patch.OnExit
         static void exit(String text) {
-            Loader.g_hasDoLoadingText = true;
+            LoaderContext.current().setHasDoLoadingText(true);
         }
     }
 }

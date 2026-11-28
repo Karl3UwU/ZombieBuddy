@@ -193,7 +193,7 @@ public final class PatchEngine {
         // Check which target classes are already loaded (use the JVM's Class instance, not Class.forName)
         Set<String> loadedClasses = new HashSet<>();
         Map<String, Class<?>> loadedClassByName = new HashMap<>();
-        for (Class<?> c : Loader.g_instrumentation.getAllLoadedClasses()) {
+        for (Class<?> c : LoaderContext.current().instrumentation.getAllLoadedClasses()) {
             String className = c.getName();
             if (targetClasses.contains(className)) {
                 loadedClasses.add(className);
@@ -220,8 +220,8 @@ public final class PatchEngine {
         }
 
         var bbLogger = AgentBuilder.Listener.StreamWriting.toSystemOut().withErrorsOnly();
-        if (Loader.g_verbosity > 0) {
-            if (Loader.g_verbosity <= 2) {
+        if (LoaderContext.current().verbosity > 0) {
+            if (LoaderContext.current().verbosity <= 2) {
                 bbLogger = AgentBuilder.Listener.StreamWriting.toSystemOut().withTransformationsOnly();
             } else { // 3+
                 bbLogger = AgentBuilder.Listener.StreamWriting.toSystemOut();
@@ -322,7 +322,7 @@ public final class PatchEngine {
                                 Logger.debug("Applied advice to " + className + "." + methodName);
                             } catch (Exception e) {
                                 Logger.error("ERROR: Failed to apply advice to " + className + "." + methodName + ": " + e.getMessage());
-                                if (Loader.g_verbosity > 0) {
+                                if (LoaderContext.current().verbosity > 0) {
                                     Logger.printStackTrace(e);
                                 }
                             }
@@ -370,7 +370,7 @@ public final class PatchEngine {
                                         .andThen(MethodDelegation.to(patchClass)));
                             } catch (Throwable t) {
                                 Logger.error("ERROR: Could not set up constructor delegation: " + t.getMessage());
-                                if (Loader.g_verbosity > 0) {
+                                if (LoaderContext.current().verbosity > 0) {
                                     Logger.printStackTrace(t);
                                 }
                                 // Fallback to SuperMethodCall
@@ -405,7 +405,7 @@ public final class PatchEngine {
 
         // Phase 1: not-yet-loaded targets — no disableClassFormatChanges (Advice may add helper methods on first define).
         if (firstLoadBuilder != null) {
-            firstLoadBuilder.installOn(Loader.g_instrumentation);
+            firstLoadBuilder.installOn(LoaderContext.current().instrumentation);
         }
 
         // Deferred targets that loaded between scan and phase-1 installOn need phase-2 retransform (with disable).
@@ -424,10 +424,10 @@ public final class PatchEngine {
         // Phase 2: already-loaded targets — disableClassFormatChanges restricts Advice to method-body changes only.
         if (needsRetransformPhase || !slipInLoaded.isEmpty()) {
             if (loadedBuilder != null) {
-                loadedBuilder.installOn(Loader.g_instrumentation);
+                loadedBuilder.installOn(LoaderContext.current().instrumentation);
             }
             if (deferredRetransformBuilder != null && !slipInLoaded.isEmpty()) {
-                deferredRetransformBuilder.installOn(Loader.g_instrumentation);
+                deferredRetransformBuilder.installOn(LoaderContext.current().instrumentation);
             }
             // installOn with RETRANSFORMATION already retransforms matching loaded types; explicit retransformClasses was redundant.
         }
@@ -481,7 +481,7 @@ public final class PatchEngine {
             return cls;
         }
 
-        for (Class<?> c : Loader.g_instrumentation.getAllLoadedClasses()) {
+        for (Class<?> c : LoaderContext.current().instrumentation.getAllLoadedClasses()) {
             if (name.equals(c.getName())) {
                 return c;
             }
@@ -515,7 +515,7 @@ public final class PatchEngine {
                 Logger.error("Could not load deferred target " + name + ": " + e.getMessage());
             } catch (Exception e) {
                 Logger.error("Error loading deferred target " + name + ": " + e.getMessage());
-                if (Loader.g_verbosity > 0) {
+                if (LoaderContext.current().verbosity > 0) {
                     Logger.printStackTrace(e);
                 }
             }

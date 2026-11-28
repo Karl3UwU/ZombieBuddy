@@ -7,7 +7,6 @@ import io.github.karl3uwu.zombud.api.Exposer;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,7 +17,11 @@ import io.github.karl3uwu.zombud.frontend.ModApprovalFrontends;
 import zombie.core.Core;
 
 public class Agent {
-    public static final Map<String, String> arguments = new HashMap<>();
+    /** Agent arguments of the current run (see {@link LoaderContext#arguments}). */
+    public static Map<String, String> arguments() {
+        return LoaderContext.current().arguments;
+    }
+
     private static final AtomicBoolean initialized = new AtomicBoolean(false);
     private static final ClassLoader _systemLoader = ClassLoader.getSystemClassLoader();
 
@@ -30,7 +33,8 @@ public class Agent {
 
         Logger.info("activating " + ZomBud.getFullVersionString());
         warnAboutOtherAgentJars();
-        Loader.g_instrumentation = inst;
+        LoaderContext ctx = LoaderContext.start(inst);
+        Map<String, String> arguments = ctx.arguments;
         Reflect.init(inst);
 
         if (!Utils.isBlank(agentArgs)) {
@@ -60,9 +64,9 @@ public class Agent {
 
         if( arguments.containsKey("verbosity")) {
             try {
-                Loader.g_verbosity = Integer.parseInt(arguments.get("verbosity"));
-                Logger.setLevel(Loader.g_verbosity);
-                Logger.info("set verbosity to " + Loader.g_verbosity);
+                ctx.verbosity = Integer.parseInt(arguments.get("verbosity"));
+                Logger.setLevel(ctx.verbosity);
+                Logger.info("set verbosity to " + ctx.verbosity);
             } catch (NumberFormatException e) {
                 Logger.error("invalid verbosity value: " + arguments.get("verbosity"));
             }
@@ -75,8 +79,8 @@ public class Agent {
         Loader.setPolicy(arguments.getOrDefault("policy", "prompt"));
 
         // When false, a missing .zbs sidecar is treated like an invalid signature (except policy=allow-all skips ZBS).
-        Loader.g_allowUnsignedMods = Boolean.parseBoolean(arguments.getOrDefault("allow_unsigned_mods", "true"));
-        Logger.info("allow_unsigned_mods=" + Loader.g_allowUnsignedMods);
+        ctx.allowUnsignedMods = Boolean.parseBoolean(arguments.getOrDefault("allow_unsigned_mods", "true"));
+        Logger.info("allow_unsigned_mods=" + ctx.allowUnsignedMods);
 
         // Java mod UI: auto (default), swing (Swing batch + TinyFD per-mod), tinyfd, console (stdin/headless).
         Loader.configureApprovalFrontend(arguments.getOrDefault("frontend", ModApprovalFrontends.ARG_AUTO));
@@ -85,8 +89,8 @@ public class Agent {
         String envVerbosity = System.getenv("ZB_VERBOSITY");
         if (!Utils.isBlank(envVerbosity)) {
             try {
-                Loader.g_verbosity = Integer.parseInt(envVerbosity);
-                Logger.info("set Loader verbosity to " + Loader.g_verbosity + " from ZB_VERBOSITY environment variable");
+                ctx.verbosity = Integer.parseInt(envVerbosity);
+                Logger.info("set Loader verbosity to " + ctx.verbosity + " from ZB_VERBOSITY environment variable");
             } catch (NumberFormatException e) {
                 Logger.error("invalid ZB_VERBOSITY value: " + envVerbosity);
             }
@@ -130,7 +134,7 @@ public class Agent {
         }
         
         // Register onGameInitComplete hooks based on arguments
-        if (arguments.containsKey("exit_after_game_init")) {
+        if (arguments().containsKey("exit_after_game_init")) {
             Callbacks.onGameInitComplete.register(Agent::exitOnGameInitComplete);
         }
 
@@ -175,18 +179,18 @@ public class Agent {
     }
 
     public static boolean isExperimental() {
-        return arguments.containsKey("experimental");
+        return arguments().containsKey("experimental");
     }
 
     public static int getArgInt(String key, int defaultVal) {
-        String v = arguments.get(key);
+        String v = arguments().get(key);
         if (v == null) return defaultVal;
         try { return Integer.parseInt(v.trim()); }
         catch (NumberFormatException e) { return defaultVal; }
     }
 
     public static Path configDir() {
-        String configured = arguments.get("config_dir");
+        String configured = arguments().get("config_dir");
         if (configured != null && !configured.trim().isEmpty()) {
             return Path.of(configured.trim());
         }
@@ -195,7 +199,7 @@ public class Agent {
 
     /** Called from Callbacks when exit_after_game_init was requested. */
     private static void exitOnGameInitComplete() {
-        if (arguments.containsKey("exit_after_game_init")) {
+        if (arguments().containsKey("exit_after_game_init")) {
             Logger.info("Exiting after game init as requested.");
             Core.getInstance().quit();
         }
