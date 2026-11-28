@@ -24,6 +24,9 @@ public class Loader {
     static final String BUNDLED_PATCHES_JAR = JarLoader.BUNDLED_PATCHES_JAR;
     static final String BUNDLED_EXPERIMENTAL_JAR = JarLoader.BUNDLED_EXPERIMENTAL_JAR;
 
+    /** {@link JavaModLoadState#reason} of a jar turned off by a failed required patch check. */
+    public static final String STATUS_PATCH_FAILED = "PATCH_FAILED";
+
     static {
         Callbacks.onDisplayCreate.register(ModApprovals::checkShiftKey);
     }

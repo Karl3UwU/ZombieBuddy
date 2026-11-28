@@ -161,6 +161,7 @@ public class Agent {
         Logger.debug("ZB     classloader: " + ZomBud.class.getClassLoader());
 
         Loader.preloadMods();
+        LoaderContext.current().patchReport().publish();
         Reflect.clearCaches();
     }
 

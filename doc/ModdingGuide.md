@@ -217,6 +217,47 @@ public class SkipExample {
 | `warmUp` | If `true`, forces the class to load before patching (needed for some game classes) |
 | `isAdvice` | If `true` (default), uses advice-based patching. If `false`, uses method delegation (complete replacement) |
 | `strictMatch` | If `true`, an advice method with no parameters matches only target methods with no parameters. Default `false` matches any overload. |
+| `descriptor` | Exact JVM descriptor of the target method, e.g. `"(ILjava/lang/String;)V"`. Empty (default) patches every overload the advice parameters fit. See [Load-time patch checks](#load-time-patch-checks). |
+| `optional` | If `true`, a failed load-time check skips only this patch. Default `false`: a failed check turns off the whole mod's Java side. |
+
+### Load-time patch checks
+
+Before installing anything, KRL ZomBud checks every `@Patch` of a mod against the game. It reads the game's
+classes without loading them, so a broken patch can't crash the game while it starts. Each patch is checked for:
+
+| Problem | Meaning |
+|---------|---------|
+| `CLASS_MISSING` | `className` doesn't exist in this game version |
+| `METHOD_MISSING` | no method called `methodName` in that class |
+| `DESCRIPTOR_MISMATCH` | `descriptor` is set, but no overload has it (the message lists the ones that exist) |
+| `ADVICE_BIND` | the advice or delegation parameters don't fit the method: wrong `@Argument` index or type, a `@Return` type the method doesn't return, `@This` on a static method, and similar |
+| `DELEGATION_CONFLICT` | another patch (from this mod or another one) already replaces the same method with `isAdvice = false`; only one delegation per method is possible |
+| `AMBIGUOUS` | warning only: the advice fits several overloads and no `descriptor` is set |
+
+**When a required patch fails, the whole mod's Java side is turned off**: none of its patches are installed and its
+`Main`/`PreMain` is not called. Half a mod is usually worse than none: the remaining patches often depend on the one
+that failed. Mark a patch `optional = true` when the rest of the mod works without it; then only that patch is
+skipped.
+
+```java
+@Patch(className = "zombie.SomeGameClass", methodName = "update", descriptor = "(F)V")
+public class RequiredPatch { ... }
+
+@Patch(className = "zombie.SomeGameClass", methodName = "drawDebugOverlay", optional = true)
+public class NiceToHavePatch { ... }
+```
+
+To find a descriptor, run `javap -s -p` on the game class, or look at the `DESCRIPTOR_MISMATCH` message, which lists
+the descriptors that exist.
+
+**What players see.** The game starts normally. The log lists each problem grouped by mod, and a line on the screen
+says, for example, *"1 Java mod was turned off because the game changed: YourMod. See patch-report.json."* The full
+report is written to `~/.krl_zombud/patch-report.json` on every start (loader version, game version, and one entry
+per problem with the mod, patch class, target, kind, message and what was done). Lua can read the same data with
+`KRLZomBud.getPatchReport()`.
+
+The bundled patches of KRL ZomBud itself go through the same checks. A failure there skips only that patch and logs
+an error; it never turns off the loader.
 
 ### Parameter Bindings
 
