@@ -66,6 +66,8 @@ dependencies {
     testImplementation 'org.mockito:mockito-core:5.24.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.24.0'
     testImplementation 'org.assertj:assertj-core:3.27.7'
+    // test-only: validates the session schema examples against schema/session-v1.schema.json
+    testImplementation 'com.networknt:json-schema-validator:1.5.9'
 }
 
 // Fixed name: zbNative.dll, 42/mod.info and the installer all expect "KRLZomBud.jar" (see doc/RENAME.md).
@@ -79,6 +81,7 @@ jar {
     manifest {
         attributes(
             'Premain-Class': 'io.github.karl3uwu.zombud.Agent',
+            'Main-Class': 'io.github.karl3uwu.zombud.Cli',
             'Can-Redefine-Classes': 'true',
             'Can-Retransform-Classes': 'true',
             'Implementation-Version': version
@@ -98,6 +101,7 @@ shadowJar {
     manifest {
         attributes(
             'Premain-Class': 'io.github.karl3uwu.zombud.Agent',
+            'Main-Class': 'io.github.karl3uwu.zombud.Cli',
             'Can-Redefine-Classes': 'true',
             'Can-Retransform-Classes': 'true',
             'Implementation-Version': version
@@ -296,6 +300,15 @@ sourceSets {
         // testpatches needs access to testjar classes for CustomObject
         compileClasspath += testjar.output
     }
+    // Deliberately broken test mods (one jar per package), loaded by test_patched next to testpatches
+    testbroken {
+        java {
+            srcDirs = ['testbroken']
+            include '**/*.java'
+        }
+        compileClasspath += main.output
+        compileClasspath += testjar.output
+    }
 }
 
 // Copy native DLL to build/libs
@@ -481,6 +494,17 @@ task testpatchesJar(type: Jar) {
     dependsOn compileTestpatchesJava
 }
 
+// One jar per broken test mod: a mod is a jar, and a failed required patch turns off the whole jar.
+['missing', 'argtype', 'optional'].each { mod ->
+    tasks.register("testbroken${mod.capitalize()}Jar", Jar) {
+        archiveBaseName.set("testbroken-${mod}")
+        from(sourceSets.testbroken.output) {
+            include "io/github/karl3uwu/zombud/testbroken/${mod}/**"
+        }
+        dependsOn compileTestbrokenJava
+    }
+}
+
 // Add testjar JAR as test dependency
 dependencies {
     testImplementation files(tasks.named('testJar'))
@@ -548,16 +572,24 @@ task test_patched(type: Test) {
     useJUnitPlatform()
     dependsOn testJar
     dependsOn testpatchesJar
+    dependsOn 'testbrokenMissingJar', 'testbrokenArgtypeJar', 'testbrokenOptionalJar'
     dependsOn shadowJar  // Fat shaded KRLZomBud.jar (javaagent)
 
     // Use testPatched source set
     testClassesDirs = sourceSets.testPatched.output.classesDirs
     classpath = sourceSets.testPatched.runtimeClasspath
+    // session-mode tests need their own JVM with a session file (see test_session*)
+    filter { excludeTestsMatching 'io.github.karl3uwu.zombud.test.session.*' }
 
     // Add javaagent JVM argument with patches_jar parameter
     // Format: <path>:<package_name>
     def patchesJarPath = testpatchesJar.archiveFile.get().asFile.absolutePath
     def patchesPackageName = "io.github.karl3uwu.zombud.testpatches"
+    // Deliberately broken mods (see testbroken/): each is its own jar = its own mod
+    def brokenJars = ['missing', 'argtype', 'optional'].collect { mod ->
+        def jarFile = tasks.named("testbroken${mod.capitalize()}Jar").get().archiveFile.get().asFile.absolutePath
+        "${jarFile}:io.github.karl3uwu.zombud.testbroken.${mod}"
+    }.join(';')
 
     // Gson must be on the bootstrap classpath so it is visible when premain() runs.
     // Deferred to doFirst so the configuration is fully resolved before we iterate.
@@ -567,8 +599,119 @@ task test_patched(type: Test) {
         def bcJar = configurations.runtimeClasspath.find { it.name.contains("bcprov") }
         if (!bcJar) throw new GradleException("bouncycastle jar not found in runtimeClasspath")
         jvmArgs "-Xbootclasspath/a:${gsonJar}${File.pathSeparator}${bcJar}"
-        jvmArgs "-javaagent:${shadowJar.archiveFile.get().asFile.absolutePath}=patches_jar=${patchesJarPath}:${patchesPackageName},config_dir=.config,prop_prefix=krl"
+        jvmArgs "-javaagent:${shadowJar.archiveFile.get().asFile.absolutePath}=patches_jar=${patchesJarPath}:${patchesPackageName};${brokenJars},config_dir=.config,prop_prefix=krl"
     }
+}
+
+
+// ---- Session mode (doc/SessionFile.md) -------------------------------------------------------------------------
+// prepareSessionFixtures lays out mod folders holding the testbroken jars, runs the real CLI
+// (java -jar KRLZomBud.jar session create) against them and the game, then derives the files each test JVM uses:
+//   session.json         optional: approved, right sha256 | missing: wrong sha256 | argtype: right sha256, not approved
+//   session-safe.json    same mods, safeMode true
+//   session-corrupt.json not JSON
+// plus mod_approvals.json in each config dir. Each test_session* task starts the agent with one of them.
+def sessionFixtureDir = layout.buildDirectory.dir('session-fixture').get().asFile
+
+task prepareSessionFixtures(type: JavaExec) {
+    description = 'Builds mod folders and session files for the session-mode tests'
+    dependsOn shadowJar, 'testbrokenMissingJar', 'testbrokenArgtypeJar', 'testbrokenOptionalJar'
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+    classpath = files(shadowJar.archiveFile)
+    mainClass = 'io.github.karl3uwu.zombud.Cli'
+
+    doFirst {
+        delete sessionFixtureDir
+        def mods = new File(sessionFixtureDir, 'Zomboid/mods')
+        ['missing', 'argtype', 'optional'].each { mod ->
+            def modId = "SessionTest${mod.capitalize()}"
+            def dir = new File(mods, "${modId}/42")
+            new File(dir, 'media/java').mkdirs()
+            new File(dir, 'mod.info').text = "name=${modId}\nid=${modId}\njavaJarFile=media/java/${mod}.jar\njavaPkgName=io.github.karl3uwu.zombud.testbroken.${mod}\n"
+            copy {
+                from tasks.named("testbroken${mod.capitalize()}Jar").get().archiveFile
+                into new File(dir, 'media/java')
+                rename { "${mod}.jar" }
+            }
+        }
+        def pzDir = project.findProperty('pzDir')?.toString()?.trim() ?: System.getenv('PZ_DIR')?.trim()
+        if (!pzDir) throw new GradleException('session tests need the game: set PZ_DIR or -PpzDir')
+        args 'session', 'create',
+            '--mods', 'SessionTestOptional,SessionTestMissing,SessionTestArgtype',
+            '--game-dir', pzDir,
+            '--user-dir', new File(sessionFixtureDir, 'Zomboid').absolutePath,
+            '--out', new File(sessionFixtureDir, 'generated.json').absolutePath,
+            '--id', 'session-test'
+    }
+
+    doLast {
+        def slurper = new groovy.json.JsonSlurper()
+        def generated = slurper.parse(new File(sessionFixtureDir, 'generated.json'))
+        def shaOf = { modId -> generated.mods.find { it.id == modId }.java[0].sha256 }
+
+        def write = { String name, Closure tweak ->
+            def s = slurper.parse(new File(sessionFixtureDir, 'generated.json'))
+            s.stageFile = new File(sessionFixtureDir, "${name}.stage").absolutePath
+            s.reportDir = new File(sessionFixtureDir, "${name}-report").absolutePath
+            tweak(s)
+            new File(sessionFixtureDir, "${name}.json").text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(s))
+        }
+        write('session') { s ->
+            s.mods.find { it.id == 'SessionTestMissing' }.java[0].sha256 = '0' * 64
+        }
+        write('session-safe') { s -> s.safeMode = true }
+        new File(sessionFixtureDir, 'session-corrupt.json').text = '{ "schema": 1, "id": '
+
+        // approve only the optional mod's jar (and the missing one, so only its sha256 can stop it)
+        ['session', 'session-safe', 'session-corrupt', 'session-missing'].each { name ->
+            def cfg = new File(sessionFixtureDir, "${name}-config")
+            cfg.mkdirs()
+            new File(cfg, 'mod_approvals.json').text = groovy.json.JsonOutput.toJson([
+                formatVersion: 2,
+                mods: [
+                    [id: 'SessionTestOptional', jar_hash: shaOf('SessionTestOptional'), decision: true],
+                    [id: 'SessionTestMissing', jar_hash: shaOf('SessionTestMissing'), decision: true],
+                ]
+            ])
+        }
+    }
+}
+
+def registerSessionTest = { String name, String testClass, String sessionFile, boolean viaEnv ->
+    tasks.register(name, Test) {
+        description = "Session-mode agent test: ${testClass}"
+        group = 'verification'
+        useJUnitPlatform()
+        dependsOn testJar, shadowJar, prepareSessionFixtures
+        testClassesDirs = sourceSets.testPatched.output.classesDirs
+        classpath = sourceSets.testPatched.runtimeClasspath
+        filter { includeTestsMatching "io.github.karl3uwu.zombud.test.session.${testClass}" }
+        def sessionPath = new File(sessionFixtureDir, sessionFile).absolutePath
+        def configDir = new File(sessionFixtureDir, "${sessionFile.replace('.json', '')}-config").absolutePath
+        systemProperty 'krl.test.fixtureDir', sessionFixtureDir.absolutePath
+        systemProperty 'krl.test.configDir', configDir
+        if (viaEnv) {
+            environment 'KRL_SESSION', sessionPath
+        } else {
+            systemProperty 'krl.session', sessionPath
+        }
+        doFirst {
+            def gsonJar = configurations.runtimeClasspath.find { it.name.contains("gson") }
+            def bcJar = configurations.runtimeClasspath.find { it.name.contains("bcprov") }
+            jvmArgs "-Xbootclasspath/a:${gsonJar}${File.pathSeparator}${bcJar}"
+            jvmArgs "-javaagent:${shadowJar.archiveFile.get().asFile.absolutePath}=config_dir=${configDir}"
+        }
+    }
+}
+registerSessionTest('test_session', 'SessionModeTest', 'session.json', false)
+registerSessionTest('test_session_safe', 'SessionSafeModeTest', 'session-safe.json', false)
+registerSessionTest('test_session_corrupt', 'SessionCorruptFileTest', 'session-corrupt.json', false)
+registerSessionTest('test_session_missing', 'SessionMissingFileTest', 'session-missing.json', true)
+
+task test_sessions {
+    description = 'All session-mode agent tests'
+    group = 'verification'
+    dependsOn 'test_session', 'test_session_safe', 'test_session_corrupt', 'test_session_missing'
 }
 
 // Unit tests (test/ source set) - e.g. AccessorTest, VersionCheckTest, PatchTest

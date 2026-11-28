@@ -108,7 +108,11 @@ final class PreloadMods {
                 remove(entry.id());
                 continue;
             }
+            lc.jarModIds.put(entry.canJarPath(), entry.id());
             JarLoader.loadJar(entry.canJarPath(), entry.javaPkgName(), entry.hash(), Loader.Phase.PREMAIN);
+            if (lc.disabledJars.contains(entry.canJarPath())) {
+                continue; // status already set to PATCH_FAILED by JarLoader
+            }
             lc.jarLoadStatus.put(entry.canJarPath(), new Loader.JavaModLoadState(
                         entry.id(),
                         entry.canJarPath(),

@@ -39,7 +39,8 @@ public class TargetPatch {
     // should trigger warnings:
     //  - not existing method
     //  - non-void return type
-    @Patch(className = "testjar.TargetClass", methodName = "notExistingMethod")
+    // optional: this patch is broken on purpose; a required one would turn off the whole test mod
+    @Patch(className = "testjar.TargetClass", methodName = "notExistingMethod", optional = true)
     public class BadTargetPatch {
         @Patch.OnExit
         public static int exit() {

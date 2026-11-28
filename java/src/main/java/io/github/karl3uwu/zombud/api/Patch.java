@@ -37,6 +37,21 @@ public @interface Patch {
                                          // if false (default), advice methods without arguments match any method
     boolean debug() default false;
 
+    /**
+     * Exact JVM descriptor of the target method, e.g. {@code "(ILjava/lang/String;)V"} (or {@code "(I)V"} for a
+     * constructor with {@code methodName = "<init>"}). Empty (default): every overload that the advice parameters
+     * fit, as before. When the game changes the signature, a descriptor makes the load-time check fail with a clear
+     * message instead of silently patching nothing.
+     */
+    String descriptor() default "";
+
+    /**
+     * When {@code true}, a failed load-time check skips only this patch. When {@code false} (default), a failed
+     * check turns off the whole mod's Java side: none of its patches are installed and its Main/PreMain is not
+     * called.
+     */
+    boolean optional() default false;
+
     /** Alias for net.bytebuddy.asm.Advice.OnMethodEnter - mods should use Patch.OnEnter instead */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.METHOD)

@@ -119,3 +119,4 @@ General-purpose methods available on the `KRLZomBud` global.
 | `getClosureFilename(obj)` | Filename of a Lua closure, or nil. |
 | `getClosureInfo(obj)` | Table with `file`, `filename`, `name`, `numParams`, `isVararg`, `line`, `fileLastModified` for a Lua closure; nil otherwise. |
 | `getCallableInfo(obj)` | Same as `zbmethod(obj)`: metadata for Lua closures and Java callables. |
+| `getPatchReport()` | Results of the load-time patch checks: `disabledMods` (list of mod ids whose Java side was turned off) and `entries` (tables with `modId`, `patchClass`, `targetClass`, `method`, `descriptor`, `kind`, `message`, `optional`, `actionTaken`). Same data as `patch-report.json`; see the [Modding Guide](ModdingGuide.md#load-time-patch-checks). |

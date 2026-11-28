@@ -31,7 +31,9 @@ public class Patch_ZomboidFileSystem {
     @Patch(className = "zombie.ZomboidFileSystem", methodName = "loadMods")
     public class Patch_loadMods2 {
         @Patch.OnEnter
-        public static void enter(List<String> toLoad, @Patch.Local("t0") long t0) {
+        public static void enter(@Patch.Argument(value = 0, readOnly = false) List<String> toLoad, @Patch.Local("t0") long t0) {
+            // Session mode: the launcher's mod list replaces the game's, in memory only (default.txt is untouched).
+            toLoad = Loader.modListFor(toLoad);
             Logger.info("ZomboidFileSystem.loadMods(" + toLoad.size() + " mods) ...");
             long loaderStartNs = System.nanoTime();
 
@@ -49,6 +51,7 @@ public class Patch_ZomboidFileSystem {
             if ( elapsedMS > 1000 ) Logger.info("ZomboidFileSystem.loadMods(" + toLoad.size() + " mods) took " + elapsedMS + " ms");
 
             Loader.maybeReorderMods(mods);
+            Loader.afterLoadMods();
         }
     }
 

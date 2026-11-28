@@ -134,3 +134,13 @@ end
 -- Run the check when on main menu
 Events.OnMainMenuEnter.Add(checkKRLZomBudInstallation)
 
+
+-- Session mode (started by a launcher): stage markers for the launcher's stage file.
+-- The loader writes premain, mods-loaded and quit itself; these two come from the standard Lua events.
+local function markSessionStage(stage)
+    if KRLZomBud and KRLZomBud.isSessionMode and KRLZomBud.isSessionMode() and KRLZomBud.markSessionStage then
+        KRLZomBud.markSessionStage(stage)
+    end
+end
+Events.OnMainMenuEnter.Add(function() markSessionStage("main-menu") end)
+Events.OnGameStart.Add(function() markSessionStage("in-game") end)

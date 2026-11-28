@@ -136,7 +136,7 @@ record JavaModInfo(
         return line.split("=", 2)[1].trim();
     }
 
-    private static String versionMismatchMessage(List<JarCandidate> candidates) {
+    private static String versionMismatchMessage(List<JarCandidate> candidates, String loaderVersion) {
         StringBuilder sb = new StringBuilder("(requires one of: ");
         for (int i = 0; i < candidates.size(); i++) {
             if (i > 0) sb.append(", ");
@@ -145,7 +145,7 @@ record JavaModInfo(
               .append(" to ")
               .append(c.krlVersionMax() != null ? c.krlVersionMax() : "any");
         }
-        sb.append("; KRL ZomBud version: ").append(ZomBud.getVersion()).append(")");
+        sb.append("; KRL ZomBud version: ").append(loaderVersion).append(")");
         return sb.toString();
     }
 
@@ -153,6 +153,11 @@ record JavaModInfo(
      * Validates parsed values and creates JavaModInfo, or null if invalid.
      */
     private static JavaModInfo validateAndCreate(ParsedValues parsed, Path infPath, Path infDir, Path jarDir, boolean bLogMissingJar) {
+        return validateAndCreate(parsed, infPath, infDir, jarDir, bLogMissingJar, ZomBud.getVersion(), Utils.isServer());
+    }
+
+    private static JavaModInfo validateAndCreate(ParsedValues parsed, Path infPath, Path infDir, Path jarDir, boolean bLogMissingJar,
+                                                 String loaderVersion, boolean isServer) {
         List<JarCandidate> candidates = parsed.jarCandidates();
         String javaPkgName = parsed.javaPkgName();
 
@@ -165,7 +170,7 @@ record JavaModInfo(
             return null;
         }
 
-        boolean isServer = Utils.isServer();
+
         boolean anyPlatformMatch = false;
         JarCandidate versionMatch = null;
 
@@ -175,7 +180,7 @@ record JavaModInfo(
                 continue;
             }
             anyPlatformMatch = true;
-            if (isVersionInRange(ZomBud.getVersion(), candidate.krlVersionMin(), candidate.krlVersionMax())) {
+            if (isVersionInRange(loaderVersion, candidate.krlVersionMin(), candidate.krlVersionMax())) {
                 versionMatch = candidate;
                 break;
             }
@@ -186,7 +191,7 @@ record JavaModInfo(
             return null;
         }
         if (versionMatch == null) {
-            Logger.error("Skipping mod due to version mismatch", infPath, versionMismatchMessage(candidates));
+            Logger.error("Skipping mod due to version mismatch", infPath, versionMismatchMessage(candidates, loaderVersion));
             return null;
         }
 
@@ -360,6 +365,36 @@ record JavaModInfo(
             return validateAndCreate(verParsed, verModInfoFile, versionDir, commonDir, true);
         }
         return validateAndCreate(commonParsed, commonModInfoFile, commonDir, versionDir, true);
+    }
+
+    /**
+     * For tools outside the game (session CLI, a Java launcher): the same B42 lookup the in-game path does
+     * (version dir, then common dir, then mod.info in one and the jar in the other), with the loader version and
+     * client/server side given instead of read from the running game. {@code versionDir} or {@code commonDir} may
+     * be null (a B41-style mod passes its folder as {@code versionDir}).
+     */
+    static JavaModInfo resolveForTool(Path versionDir, Path commonDir, String loaderVersion, boolean isServer) {
+        JavaModInfo r = parseForTool(versionDir, loaderVersion, isServer);
+        if (r == null) r = parseForTool(commonDir, loaderVersion, isServer);
+        if (r == null && versionDir != null && commonDir != null
+                && Files.isDirectory(versionDir) && Files.isDirectory(commonDir)) {
+            ParsedValues common = parseModInfoFile(commonDir.resolve("mod.info"));
+            if (common != null) {
+                r = validateAndCreate(common, commonDir.resolve("mod.info"), commonDir, versionDir, false, loaderVersion, isServer);
+            } else {
+                ParsedValues ver = parseModInfoFile(versionDir.resolve("mod.info"));
+                if (ver != null) {
+                    r = validateAndCreate(ver, versionDir.resolve("mod.info"), versionDir, commonDir, false, loaderVersion, isServer);
+                }
+            }
+        }
+        return r;
+    }
+
+    private static JavaModInfo parseForTool(Path dir, String loaderVersion, boolean isServer) {
+        if (dir == null || !Files.isDirectory(dir)) return null;
+        ParsedValues parsed = parseModInfoFile(dir.resolve("mod.info"));
+        return parsed == null ? null : validateAndCreate(parsed, dir.resolve("mod.info"), dir, dir, false, loaderVersion, isServer);
     }
 
     static JavaModInfo parseMerged(String commonDirStr, String versionDirStr) {

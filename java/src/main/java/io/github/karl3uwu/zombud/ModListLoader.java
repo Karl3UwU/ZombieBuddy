@@ -397,12 +397,19 @@ final class ModListLoader {
                 if (prev != null) {
                     flags = flags.merge(prev.flags().getSticky());
                 }
+                String reason = shouldSkip ? skipReason.trim() : "loaded";
+                if (lc.disabledJars.contains(canonicalJarPath)) {
+                    // turned off earlier this run by a failed patch check; it stays off until restart
+                    flags = flags.without(MF_ACTIVE).with(ModFlags.MF_PATCH_FAILED);
+                    reason = Loader.STATUS_PATCH_FAILED;
+                }
+                lc.jarModIds.put(canonicalJarPath, ctx.modId);
 
                 lc.jarLoadStatus.put(canonicalJarPath, new Loader.JavaModLoadState(
                     ctx.modId,
                     canonicalJarPath,
                     flags,
-                    shouldSkip ? skipReason.trim() : "loaded",
+                    reason,
                     ctx.hash,
                     decision
                 ));
@@ -446,5 +453,6 @@ final class ModListLoader {
                 JarLoader.loadJar(jModInfos.get(i).jarPath(), jModInfos.get(i).javaPkgName(), modContexts.get(i).hash, Loader.Phase.MAIN);
             }
         }
+        lc.patchReport.publish();
     }
 }

@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "id": "3f2b8c1e-7a44-4c55-9a1e-2f0d6c9b1a70",
+  "created": "2026-11-28T01:00:00Z",
+  "gameBuild": "42.22.2",
+  "loaderVersion": "3.0.0-beta3",
+  "intent": { "kind": "continue", "save": "Sandbox/2026-11-27_20-15-03" },
+  "mods": [
+    {
+      "id": "\\KRLZomBud",
+      "dir": "C:\\Users\\Player\\Zomboid\\mods\\KRLZomBud\\42"
+    },
+    {
+      "id": "BetterFPS",
+      "workshopId": 3022543997,
+      "dir": "C:\\Program Files (x86)\\Steam\\steamapps\\workshop\\content\\108600\\3022543997\\mods\\BetterFPS\\42",
+      "java": [
+        {
+          "jar": "C:\\Program Files (x86)\\Steam\\steamapps\\workshop\\content\\108600\\3022543997\\mods\\BetterFPS\\42\\media\\java\\BetterFPS.jar",
+          "sha256": "9f2c4a7d0b8e1f3a5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b",
+          "pkg": "com.example.betterfps"
+        }
+      ]
+    },
+    {
+      "id": "SomeLuaMod",
+      "dir": "C:/Users/Player/Zomboid/mods/SomeLuaMod/common"
+    }
+  ],
+  "safeMode": false,
+  "coreFixes": { "enabled": true, "overrides": { "fix-macos-retina": false } },
+  "stageFile": "C:\\Users\\Player\\.krl_zombud\\sessions\\3f2b8c1e.stage",
+  "reportDir": "C:\\Users\\Player\\.krl_zombud\\sessions",
+  "launcherNote": "unknown fields like this one are ignored"
+}

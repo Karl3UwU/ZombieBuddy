@@ -30,7 +30,7 @@ public final class PatchEngine {
 
     private PatchEngine() {}
 
-    private static record PatchTarget(String className, String methodName) {}
+    private static record PatchTarget(String className, String methodName, String descriptor) {}
 
     private static final List<Class<? extends Annotation>> ADVICE_ANNOTATION_TYPES = List.of(
             Advice.OnMethodEnter.class,
@@ -142,8 +142,21 @@ public final class PatchEngine {
      * @param transformedJar transformed mod jar contents (required for MethodDelegation into foreign class loaders)
      */
     public static void applyPatches(List<String> patchClassNames, ClassLoader modLoader, TransformedJar transformedJar) {
+        applyPatches(patchClassNames, modLoader, transformedJar, Set.of(), null, null);
+    }
+
+    /**
+     * Apply patches, leaving out {@code skipPatchClasses} (patches that failed their {@link PatchChecker} check).
+     * Transform errors reported by the agent are recorded in the {@link PatchReport} under {@code modId}.
+     */
+    static void applyPatches(List<String> patchClassNames, ClassLoader modLoader, TransformedJar transformedJar,
+                             Set<String> skipPatchClasses, String modId, String jarName) {
         List<Class<?>> patches = new ArrayList<>();
         for (String patchClassName : patchClassNames) {
+            if (skipPatchClasses != null && skipPatchClasses.contains(patchClassName)) {
+                Logger.warn("Skipping patch class " + patchClassName + " (failed its load-time check)");
+                continue;
+            }
             try {
                 Class<?> patchClass = modLoader.loadClass(patchClassName);
                 Logger.info("Found patch class: " + patchClass.getName());
@@ -157,7 +170,7 @@ public final class PatchEngine {
             return;
         }
 
-        // Group patches by target class+method
+        // Group patches by target class+method+descriptor
         Map<PatchTarget, List<Class<?>>> advicePatches = new HashMap<>();
         Map<PatchTarget, Class<?>> delegationPatches = new HashMap<>();
 
@@ -166,14 +179,7 @@ public final class PatchEngine {
             if (ann == null) continue;
             if (ann.className().startsWith("io.github.karl3uwu.zombud.")) continue; // refuse to patch our own classes
 
-            // if (ann.className().equals("zombie.Lua.LuaManager$Exposer") && ann.methodName().equals("exposeAll") && !ann.IKnowWhatIAmDoing()) {
-                // Logger.error("XXX");
-                // Logger.error("XXX don't patch Exposer.exposeAll, use @Exposer.LuaClass annotation!");
-                // Logger.error("XXX");
-                // continue;
-            // }
-
-            PatchTarget target = new PatchTarget(ann.className(), ann.methodName());
+            PatchTarget target = new PatchTarget(ann.className(), ann.methodName(), ann.descriptor().trim());
 
             if (ann.isAdvice()) {
                 advicePatches.computeIfAbsent(target, k -> new ArrayList<>()).add(patch);
@@ -237,7 +243,7 @@ public final class PatchEngine {
                 // (retransform of loaded types needs disableClassFormatChanges in phase 2).
                 .with(AgentBuilder.RedefinitionStrategy.DISABLED)
                 .with(bbLogger)
-                .with(zbListenerFor(patchOnFirstLoad));
+                .with(zbListenerFor(patchOnFirstLoad, modId, jarName));
         }
 
         AgentBuilder loadedBuilder = null;
@@ -245,7 +251,7 @@ public final class PatchEngine {
             loadedBuilder = new AgentBuilder.Default()
                 .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
                 .with(bbLogger)
-                .with(zbListenerFor(loadedClasses))
+                .with(zbListenerFor(loadedClasses, modId, jarName))
                 .disableClassFormatChanges();
         }
 
@@ -255,28 +261,28 @@ public final class PatchEngine {
             deferredRetransformBuilder = new AgentBuilder.Default()
                 .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
                 .with(bbLogger)
-                .with(zbListenerFor(patchOnFirstLoad))
+                .with(zbListenerFor(patchOnFirstLoad, modId, jarName))
                 .disableClassFormatChanges();
         }
 
         for (String className : targetClasses) {
             // Collect all method patches for this class
-            Map<String, List<Class<?>>> methodAdvices = new HashMap<>();
-            Map<String, Class<?>> methodDelegations = new HashMap<>();
+            Map<PatchTarget, List<Class<?>>> methodAdvices = new HashMap<>();
+            Map<PatchTarget, Class<?>> methodDelegations = new HashMap<>();
 
             for (var entry : advicePatches.entrySet()) {
                 if (entry.getKey().className().equals(className)) {
-                    methodAdvices.put(entry.getKey().methodName(), entry.getValue());
+                    methodAdvices.put(entry.getKey(), entry.getValue());
                 }
             }
             for (var entry : delegationPatches.entrySet()) {
                 if (entry.getKey().className().equals(className)) {
-                    methodDelegations.put(entry.getKey().methodName(), entry.getValue());
+                    methodDelegations.put(entry.getKey(), entry.getValue());
                 }
             }
 
-            final Map<String, List<Class<?>>> classAdvices = Map.copyOf(methodAdvices);
-            final Map<String, Class<?>> classDelegations = Map.copyOf(methodDelegations);
+            final Map<PatchTarget, List<Class<?>>> classAdvices = Map.copyOf(methodAdvices);
+            final Map<PatchTarget, Class<?>> classDelegations = Map.copyOf(methodDelegations);
 
             var patchTransform = new net.bytebuddy.agent.builder.AgentBuilder.Transformer() {
                 @Override
@@ -291,100 +297,62 @@ public final class PatchEngine {
                     }
 
                     var result = bl;
-                    
+
                     // Apply stacked Advice patches per method
                     for (var entry : classAdvices.entrySet()) {
-                        String methodName = entry.getKey();
+                        String methodName = entry.getKey().methodName();
+                        String descriptor = entry.getKey().descriptor();
                         List<Class<?>> advices = entry.getValue();
-                        
-                        Logger.info("patching " + className + "." + methodName + " with " + advices.size() + " advice(s)");
-                        
+
+                        Logger.info("patching " + className + "." + methodName + descriptor + " with " + advices.size() + " advice(s)");
+
                         // Check if method exists in the type description
-                        var methods = td.getDeclaredMethods().filter(SyntaxSugar.methodMatcher(methodName));
+                        var methods = td.getDeclaredMethods().filter(withDescriptor(SyntaxSugar.methodMatcher(methodName), descriptor));
                         if (methods.isEmpty()) {
-                            Logger.warn("Method " + methodName + " not found in " + td.getName());
+                            Logger.warn("Method " + methodName + descriptor + " not found in " + td.getName());
                         }
-                        
+
                         // Apply each advice via separate .visit() calls - they stack
                         for (Class<?> adviceClass : advices) {
-                            Patch patchAnn = adviceClass.getAnnotation(Patch.class);
-                            boolean strictMatch = patchAnn != null && patchAnn.strictMatch();
-
-                            Class<?> patchClass = ModJarInjector.loadInClassLoader(adviceClass, cl);
-                            patchClass = PatchTransformer.preparePatch(patchClass, td);
-                            if (patchClass == null) continue;
-
-                            var methodMatcher = buildAdviceMethodMatcher(methodName, strictMatch, patchClass, null);
-
                             try {
+                                Patch patchAnn = adviceClass.getAnnotation(Patch.class);
+                                boolean strictMatch = patchAnn != null && patchAnn.strictMatch();
+
+                                Class<?> patchClass = ModJarInjector.loadInClassLoader(adviceClass, cl);
+                                patchClass = PatchTransformer.preparePatch(patchClass, td);
+                                if (patchClass == null) continue;
+
+                                var methodMatcher = withDescriptor(buildAdviceMethodMatcher(methodName, strictMatch, patchClass, null), descriptor);
+
                                 ClassFileLocator locator = classFileLocator(transformedJar, modLoader);
                                 result = result.visit(Advice.to(patchClass, locator).on(methodMatcher));
                                 Logger.debug("Applied advice to " + className + "." + methodName);
-                            } catch (Exception e) {
-                                Logger.error("ERROR: Failed to apply advice to " + className + "." + methodName + ": " + e.getMessage());
+                            } catch (Throwable e) {
+                                Logger.error("ERROR: Failed to apply advice " + adviceClass.getName() + " to " + className + "." + methodName + ": " + e.getMessage());
+                                reportTransformError(modId, jarName, adviceClass, className, methodName, descriptor, e);
                                 if (LoaderContext.current().verbosity > 0) {
                                     Logger.printStackTrace(e);
                                 }
                             }
                         }
                     }
-                    
+
                     // Apply MethodDelegation patches (only one per method)
                     for (var entry : classDelegations.entrySet()) {
-                        String methodName = entry.getKey();
+                        String methodName = entry.getKey().methodName();
+                        String descriptor = entry.getKey().descriptor();
                         Class<?> delegationClass = entry.getValue();
-
-                        Class<?> patchClass = ModJarInjector.loadInClassLoader(delegationClass, cl);
-                        patchClass = PatchTransformer.preparePatch(patchClass, td);
-                        if (patchClass == null) continue;
-
-                        Logger.info("patching " + className + "." + methodName + " with delegation");
-                        
-                        // Special handling for constructors: always use Object's constructor when overriding
-                        if (methodName.equals("<init>")) {
-                            try {
-                                // Infer constructor signature from delegation method's @Argument annotations
-                                Method delegationMethod = findMethodWithAnnotation(patchClass, RuntimeType.class);
-                                List<Class<?>> inferredConstructorSignature = null;
-                                if (delegationMethod != null) {
-                                    inferredConstructorSignature = inferSignatureFromMethod(delegationMethod);
-                                }
-                                
-                                // Build constructor matcher based on inferred signature
-                                net.bytebuddy.matcher.ElementMatcher.Junction<net.bytebuddy.description.method.MethodDescription> constructorMatcher;
-                                if (!Utils.isBlank(inferredConstructorSignature)) {
-                                    // Match constructor with specific signature
-                                    constructorMatcher = net.bytebuddy.matcher.ElementMatchers.isConstructor()
-                                        .and(net.bytebuddy.matcher.ElementMatchers.takesArguments(inferredConstructorSignature.toArray(new Class<?>[0])));
-                                } else {
-                                    // No signature inferred, match all constructors (fallback)
-                                    constructorMatcher = net.bytebuddy.matcher.ElementMatchers.isConstructor();
-                                }
-                                
-                                // Always use Object's constructor when overriding a constructor.
-                                // Field initializers will still run during object allocation (before any constructor is called).
-                                java.lang.reflect.Constructor<?> objectConstructor = Object.class.getDeclaredConstructor();
-                                result = result
-                                    .constructor(constructorMatcher)
-                                    .intercept(MethodCall.invoke(objectConstructor)
-                                        .andThen(MethodDelegation.to(patchClass)));
-                            } catch (Throwable t) {
-                                Logger.error("ERROR: Could not set up constructor delegation: " + t.getMessage());
-                                if (LoaderContext.current().verbosity > 0) {
-                                    Logger.printStackTrace(t);
-                                }
-                                // Fallback to SuperMethodCall
-                                result = result
-                                    .constructor(ElementMatchers.any())
-                                    .intercept(SuperMethodCall.INSTANCE.andThen(MethodDelegation.to(patchClass)));
+                        try {
+                            result = applyDelegation(result, td, cl, className, methodName, descriptor, delegationClass);
+                        } catch (Throwable e) {
+                            Logger.error("ERROR: Failed to apply delegation " + delegationClass.getName() + " to " + className + "." + methodName + ": " + e.getMessage());
+                            reportTransformError(modId, jarName, delegationClass, className, methodName, descriptor, e);
+                            if (LoaderContext.current().verbosity > 0) {
+                                Logger.printStackTrace(e);
                             }
-                        } else {
-                            result = result
-                                .method(SyntaxSugar.methodMatcher(methodName))
-                                .intercept(MethodDelegation.to(patchClass));
                         }
                     }
-                    
+
                     return result;
                 }
             };
@@ -433,6 +401,97 @@ public final class PatchEngine {
         }
     }
 
+    /** Narrows a method matcher to one JVM descriptor when the patch declares one. */
+    static net.bytebuddy.matcher.ElementMatcher.Junction<MethodDescription> withDescriptor(
+            net.bytebuddy.matcher.ElementMatcher.Junction<MethodDescription> matcher, String descriptor) {
+        if (descriptor == null || descriptor.isBlank()) {
+            return matcher;
+        }
+        return matcher.and(ElementMatchers.hasDescriptor(descriptor.trim()));
+    }
+
+    private static net.bytebuddy.dynamic.DynamicType.Builder<?> applyDelegation(
+            net.bytebuddy.dynamic.DynamicType.Builder<?> result,
+            net.bytebuddy.description.type.TypeDescription td,
+            ClassLoader cl,
+            String className,
+            String methodName,
+            String descriptor,
+            Class<?> delegationClass) {
+        Class<?> patchClass = ModJarInjector.loadInClassLoader(delegationClass, cl);
+        patchClass = PatchTransformer.preparePatch(patchClass, td);
+        if (patchClass == null) return result;
+
+        Logger.info("patching " + className + "." + methodName + descriptor + " with delegation");
+
+        if (!methodName.equals("<init>")) {
+            return result
+                .method(withDescriptor(SyntaxSugar.methodMatcher(methodName), descriptor))
+                .intercept(MethodDelegation.to(patchClass));
+        }
+
+        // Special handling for constructors: always use Object's constructor when overriding
+        try {
+            net.bytebuddy.matcher.ElementMatcher.Junction<MethodDescription> constructorMatcher;
+            if (descriptor != null && !descriptor.isBlank()) {
+                constructorMatcher = ElementMatchers.isConstructor().and(ElementMatchers.hasDescriptor(descriptor.trim()));
+            } else {
+                // Infer constructor signature from delegation method's @Argument annotations
+                Method delegationMethod = findMethodWithAnnotation(patchClass, RuntimeType.class);
+                List<Class<?>> inferredConstructorSignature = null;
+                if (delegationMethod != null) {
+                    inferredConstructorSignature = inferSignatureFromMethod(delegationMethod);
+                }
+                if (!Utils.isBlank(inferredConstructorSignature)) {
+                    // Match constructor with specific signature
+                    constructorMatcher = ElementMatchers.isConstructor()
+                        .and(ElementMatchers.takesArguments(inferredConstructorSignature.toArray(new Class<?>[0])));
+                } else {
+                    // No signature inferred, match all constructors (fallback)
+                    constructorMatcher = ElementMatchers.isConstructor();
+                }
+            }
+
+            // Always use Object's constructor when overriding a constructor.
+            // Field initializers will still run during object allocation (before any constructor is called).
+            java.lang.reflect.Constructor<?> objectConstructor = Object.class.getDeclaredConstructor();
+            return result
+                .constructor(constructorMatcher)
+                .intercept(MethodCall.invoke(objectConstructor)
+                    .andThen(MethodDelegation.to(patchClass)));
+        } catch (Throwable t) {
+            Logger.error("ERROR: Could not set up constructor delegation: " + t.getMessage());
+            if (LoaderContext.current().verbosity > 0) {
+                Logger.printStackTrace(t);
+            }
+            // Fallback to SuperMethodCall
+            return result
+                .constructor(ElementMatchers.any())
+                .intercept(SuperMethodCall.INSTANCE.andThen(MethodDelegation.to(patchClass)));
+        }
+    }
+
+    /** Records an error seen while installing or transforming; the class is already loading, so only report it. */
+    private static void reportTransformError(String modId, String jarName, Class<?> patchClass, String className,
+                                             String methodName, String descriptor, Throwable t) {
+        try {
+            Patch ann = patchClass != null ? patchClass.getAnnotation(Patch.class) : null;
+            LoaderContext.current().patchReport.add(new PatchReport.Entry(
+                modId != null ? modId : "?",
+                jarName,
+                patchClass != null ? patchClass.getName() : "",
+                className,
+                methodName,
+                descriptor,
+                PatchChecker.Kind.TRANSFORM_ERROR,
+                String.valueOf(t.getMessage() != null ? t.getMessage() : t),
+                ann != null && ann.optional(),
+                PatchReport.Action.CLASS_UNPATCHED));
+        } catch (Throwable ignored) {
+            // never let reporting break a transformation
+        }
+    }
+
     private static ClassFileLocator classFileLocator(TransformedJar transformedJar, ClassLoader modLoader) {
         if (transformedJar == null || transformedJar.classes().isEmpty()) {
             return ClassFileLocator.ForClassLoader.of(modLoader);
@@ -444,7 +503,7 @@ public final class PatchEngine {
         );
     }
 
-    private static AgentBuilder.Listener zbListenerFor(Set<String> warnIfIgnoredTargets) {
+    private static AgentBuilder.Listener zbListenerFor(Set<String> warnIfIgnoredTargets, String modId, String jarName) {
         return new AgentBuilder.Listener.Adapter() {
             @Override
             public void onTransformation(net.bytebuddy.description.type.TypeDescription td,
@@ -453,12 +512,14 @@ public final class PatchEngine {
                                          boolean loaded,
                                          net.bytebuddy.dynamic.DynamicType dt) {
                 Logger.info("Transformed: " + td.getName() + (loaded ? " (retransformed)" : " (new load)"));
+                (loaded ? LoaderContext.current().retransformedClasses : LoaderContext.current().firstLoadClasses).add(td.getName());
             }
 
             @Override
             public void onError(String typeName, ClassLoader cl, net.bytebuddy.utility.JavaModule jm,
                                boolean loaded, Throwable throwable) {
                 Logger.error("ERROR transforming " + typeName + ": " + throwable.getMessage());
+                reportTransformError(modId, jarName, null, typeName, "", "", throwable);
                 Logger.printStackTrace(throwable);
             }
 
@@ -522,7 +583,7 @@ public final class PatchEngine {
         }
     }
 
-    private static net.bytebuddy.matcher.ElementMatcher.Junction<MethodDescription> buildAdviceMethodMatcher(
+    static net.bytebuddy.matcher.ElementMatcher.Junction<MethodDescription> buildAdviceMethodMatcher(
             String methodName,
             boolean strictMatch,
             Class<?> patchClass,
@@ -709,7 +770,8 @@ public final class PatchEngine {
                     break;
                 }
 
-                return allArgsMatch || (noParam && !strict && minParams == 0);
+                // result: a no-arg advice matched a no-arg target (strictMatch); it used to be ignored here
+                return result || allArgsMatch || (noParam && !strict && minParams == 0);
             }
         });
     }
