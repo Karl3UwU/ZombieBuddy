@@ -50,6 +50,39 @@ public class ZomBud {
         Loader.setFixMacOSRetina(value);
     }
 
+    /**
+     * Lua: {@code KRLZomBud.getPatchReport()}. A table with {@code disabledMods} (list of mod ids whose Java side was
+     * turned off) and {@code entries} (one table per problem: modId, patchClass, targetClass, method, descriptor,
+     * kind, message, optional, actionTaken). Same data as {@code patch-report.json}.
+     */
+    public static KahluaTable getPatchReport() {
+        var report = io.github.karl3uwu.zombud.LoaderContext.current().patchReport();
+        var tbl = LuaManager.platform.newTable();
+        var disabled = LuaManager.platform.newTable();
+        int i = 1;
+        for (String id : report.disabledMods()) {
+            disabled.rawset(Double.valueOf(i++), id);
+        }
+        tbl.rawset("disabledMods", disabled);
+        var entries = LuaManager.platform.newTable();
+        i = 1;
+        for (var e : report.entries()) {
+            var t = LuaManager.platform.newTable();
+            t.rawset("modId", e.modId());
+            t.rawset("patchClass", e.patchClass());
+            t.rawset("targetClass", e.targetClass());
+            t.rawset("method", e.method());
+            t.rawset("descriptor", e.descriptor());
+            t.rawset("kind", e.kind().name());
+            t.rawset("message", e.message());
+            t.rawset("optional", e.optional());
+            t.rawset("actionTaken", e.actionTaken().name());
+            entries.rawset(Double.valueOf(i++), t);
+        }
+        tbl.rawset("entries", entries);
+        return tbl;
+    }
+
     // lua-facing variant of Loader.getActiveJavaMods(). Returns a list of modIds for JARs that were loaded this run.
     public static KahluaTable getActiveJavaMods() {
         var tbl = LuaManager.platform.newTable();

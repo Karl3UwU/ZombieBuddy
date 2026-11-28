@@ -7,12 +7,17 @@ import java.lang.invoke.MethodHandle;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
 
 import io.github.karl3uwu.zombud.api.Exposer;
+import io.github.karl3uwu.zombud.api.Patch;
 import io.github.karl3uwu.zombud.api.Reflect;
 import io.github.karl3uwu.zombud.transformers.Pipeline;
 import io.github.karl3uwu.zombud.transformers.TransformedJar;
@@ -89,6 +94,7 @@ final class JarLoader {
         }
 
         Path cacheKey = embeddedJarKey(resourceName);
+        LoaderContext.current().bundledJars.add(cacheKey);
         if (LoaderContext.current().modLoaders.containsKey(cacheKey)) {
             return applyPatchesFromPackage(packageName, cacheKey, phase);
         }
@@ -191,6 +197,24 @@ final class JarLoader {
                 return false;
             }
         }
+        boolean firstPhase = phases.size() == 1;
+
+        // Check every @Patch against the game before running any of the mod's code.
+        Set<String> skipPatches = Set.of();
+        if (firstPhase) {
+            PatchChecker.ModResult check = checkPatches(lc, jarPath, packageName, modLoader, transformed);
+            if (check != null && check.requiredFailure() && !lc.bundledJars.contains(jarPath)) {
+                lc.disabledJars.add(jarPath);
+                markPatchFailed(lc, jarPath, modIdFor(lc, jarPath, packageName));
+            } else if (check != null) {
+                skipPatches = new HashSet<>(check.failedPatchClasses());
+            }
+        }
+        if (lc.disabledJars.contains(jarPath)) {
+            Logger.error("Java side of " + modIdFor(lc, jarPath, packageName)
+                + " is turned off (a required patch failed its check); not running its " + phase + " class or patches");
+            return false;
+        }
 
         // Load and invoke optional [Pre]Main class
         String mainClassName = phase == Loader.Phase.PREMAIN ? transformed.preMainClassName() : transformed.mainClassName();
@@ -207,11 +231,129 @@ final class JarLoader {
         }
 
         // only apply patches on the first phase that loads this package
-        if (phases.size() == 1) {
+        if (firstPhase) {
             Exposer.exposeClassesFromPackage(modLoader, transformed.classes().keySet(), packageName);
-            PatchEngine.applyPatches(transformed.patches(), modLoader, transformed);
+            String modId = modIdFor(lc, jarPath, packageName);
+            registerDelegations(lc, modId, modLoader, transformed.patches(), skipPatches);
+            PatchEngine.applyPatches(transformed.patches(), modLoader, transformed, skipPatches, modId, jarPath.toString());
         }
         return true;
+    }
+
+    static String modIdFor(LoaderContext lc, Path jarPath, String packageName) {
+        String id = lc.jarModIds.get(jarPath);
+        return id != null ? id : packageName;
+    }
+
+    /** Runs {@link PatchChecker} on the jar's patches and records the outcome in the report. */
+    private static PatchChecker.ModResult checkPatches(LoaderContext lc, Path jarPath, String packageName,
+                                                       ClassLoader modLoader, TransformedJar transformed) {
+        if (transformed.patches().isEmpty()) {
+            return null;
+        }
+        String modId = modIdFor(lc, jarPath, packageName);
+        boolean bundled = lc.bundledJars.contains(jarPath);
+        List<Class<?>> patchClasses = new java.util.ArrayList<>();
+        for (String name : transformed.patches()) {
+            try {
+                patchClasses.add(modLoader.loadClass(name));
+            } catch (ClassNotFoundException | LinkageError e) {
+                Logger.error("Error loading patch class " + name + ": " + e);
+            }
+        }
+
+        Map<String, Class<?>> loaded = loadedTargets(lc, patchClasses);
+        ClassLoader gameLoader = ClassLoader.getSystemClassLoader();
+        for (Class<?> c : loaded.values()) {
+            if (c.getClassLoader() != null) {
+                gameLoader = c.getClassLoader();
+                break;
+            }
+        }
+
+        PatchChecker.ModResult result;
+        try {
+            result = PatchChecker.check(patchClasses,
+                new PatchChecker.Env(transformed, modLoader, gameLoader, loaded::get),
+                modId, lc.delegationOwners::get);
+        } catch (Throwable t) {
+            // A broken checker must never take the loader down: install as before.
+            Logger.error("Patch check for " + modId + " failed to run: " + t);
+            return null;
+        }
+
+        boolean disableMod = result.requiredFailure() && !bundled;
+        List<PatchReport.Entry> modEntries = new java.util.ArrayList<>();
+        for (PatchChecker.PatchResult p : result.patches()) {
+            for (PatchChecker.Problem problem : p.problems()) {
+                PatchReport.Action action;
+                if (!problem.kind().failure) {
+                    action = PatchReport.Action.WARNING;
+                } else if (disableMod) {
+                    action = PatchReport.Action.MOD_DISABLED;
+                } else {
+                    action = PatchReport.Action.PATCH_SKIPPED;
+                }
+                PatchReport.Entry e = new PatchReport.Entry(modId, jarPath.toString(), p.patchClass(), p.targetClass(),
+                    p.method(), p.descriptor(), problem.kind(), problem.message(), p.optional(), action);
+                modEntries.add(e);
+                lc.patchReport.add(e);
+            }
+        }
+        PatchReport.log(modId, modEntries);
+        if (bundled && result.requiredFailure()) {
+            Logger.error("Bundled patch(es) of " + ModIdentity.DISPLAY_NAME + " failed their check and were skipped: "
+                + result.failedPatchClasses());
+        }
+        return result;
+    }
+
+    /** Loaded game classes named as patch targets, by name (never loads anything). */
+    private static Map<String, Class<?>> loadedTargets(LoaderContext lc, List<Class<?>> patchClasses) {
+        Set<String> wanted = new HashSet<>();
+        for (Class<?> pc : patchClasses) {
+            Patch ann = pc.getAnnotation(Patch.class);
+            if (ann != null) wanted.add(ann.className());
+        }
+        Map<String, Class<?>> out = new HashMap<>();
+        if (lc.instrumentation == null || wanted.isEmpty()) {
+            return out;
+        }
+        for (Class<?> c : lc.instrumentation.getAllLoadedClasses()) {
+            if (wanted.contains(c.getName())) {
+                out.putIfAbsent(c.getName(), c);
+            }
+        }
+        return out;
+    }
+
+    private static void registerDelegations(LoaderContext lc, String modId, ClassLoader modLoader,
+                                            List<String> patchNames, Set<String> skip) {
+        for (String name : patchNames) {
+            if (skip.contains(name)) continue;
+            try {
+                Patch ann = modLoader.loadClass(name).getAnnotation(Patch.class);
+                if (ann != null && !ann.isAdvice()) {
+                    lc.delegationOwners.putIfAbsent(
+                        PatchChecker.delegationKey(ann.className(), ann.methodName(), ann.descriptor().trim()),
+                        modId + " (" + name + ")");
+                }
+            } catch (ClassNotFoundException | LinkageError ignored) {
+            }
+        }
+    }
+
+    /** Marks the jar's load status as turned off by a failed patch check. */
+    private static void markPatchFailed(LoaderContext lc, Path jarPath, String modId) {
+        Loader.JavaModLoadState prev = lc.jarLoadStatus.get(jarPath);
+        ModFlags flags = (prev != null ? prev.flags() : ModFlags.EMPTY).without(ModFlags.MF_ACTIVE).with(ModFlags.MF_PATCH_FAILED);
+        lc.jarLoadStatus.put(jarPath, new Loader.JavaModLoadState(
+            prev != null ? prev.id() : modId,
+            jarPath,
+            flags,
+            Loader.STATUS_PATCH_FAILED,
+            prev != null ? prev.sha256() : null,
+            prev != null ? prev.decision() : null));
     }
 
     private static Class<?> loadMainClass(String mainClassName, ClassLoader modLoader) {

@@ -14,8 +14,10 @@ public record ModFlags(int value) {
     public static final int MF_BANNED       = 1 << 4;
     public static final int MF_PRELOAD      = 1 << 5;
     public static final int MF_TRUST_AUTHOR = 1 << 6;
+    /** A required patch failed its load-time check; the mod's Java side is off. */
+    public static final int MF_PATCH_FAILED = 1 << 7;
 
-    private static final List<Integer> STICKY_FLAGS = List.of(MF_ACTIVE, MF_BANNED, MF_PRELOAD);
+    private static final List<Integer> STICKY_FLAGS = List.of(MF_ACTIVE, MF_BANNED, MF_PRELOAD, MF_PATCH_FAILED);
 
     public static final ModFlags EMPTY = new ModFlags(0);
 
@@ -61,6 +63,7 @@ public record ModFlags(int value) {
         map.put("banned", has(MF_BANNED));
         map.put("preload", has(MF_PRELOAD));
         map.put("trustAuthor", has(MF_TRUST_AUTHOR));
+        map.put("patchFailed", has(MF_PATCH_FAILED));
         return map;
     }
 }

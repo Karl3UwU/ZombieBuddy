@@ -115,6 +115,21 @@ public final class LoaderContext {
     /** Widest package name printed so far, for aligned mod lists. */
     int maxPkgLen = 0;
 
+    /** Mod id per loaded jar key, for messages; falls back to the package name. */
+    final Map<Path, String> jarModIds = new ConcurrentHashMap<>();
+    /** Jars embedded in the agent (patches.jar, experimental.jar): a failed check skips only that patch. */
+    final Set<Path> bundledJars = ConcurrentHashMap.newKeySet();
+    /** Jars whose Java side was turned off by a failed required patch check. */
+    final Set<Path> disabledJars = ConcurrentHashMap.newKeySet();
+    /** Installed MethodDelegations: {@link PatchChecker#delegationKey} → "modId (patch class)". */
+    final Map<String, String> delegationOwners = new ConcurrentHashMap<>();
+    /** Results of the load-time patch checks and transform errors. */
+    final PatchReport patchReport = new PatchReport();
+
+    public PatchReport patchReport() {
+        return patchReport;
+    }
+
     /** Classes already redefined by {@link PatchTransformer}, by name. */
     final Map<String, Class<?>> transformedClasses = new ConcurrentHashMap<>();
 
