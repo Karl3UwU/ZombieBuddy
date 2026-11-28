@@ -31,8 +31,8 @@ Nothing is loaded until you click **Yes**. A second dialog asks whether the deci
 
 ### Where decisions are stored
 
-- **Windows:** `%USERPROFILE%\.zombie_buddy\mod_approvals.json`
-- **macOS / Linux:** `~/.zombie_buddy/mod_approvals.json`
+- **Windows:** `%USERPROFILE%\.krl_zombud\mod_approvals.json`
+- **macOS / Linux:** `~/.krl_zombud/mod_approvals.json` (copied from `~/.zombie_buddy` on first start if only that exists)
 
 The file is JSON (with room for future top-level fields). Persisted allow/deny pairs live under `mods` as a nested object: each **mod id** maps to an object of **SHA-256 hex → JSON boolean** (`true` = allow, `false` = deny). To revoke a decision, edit or remove the matching mod/hash under `mods` and restart the game.
 

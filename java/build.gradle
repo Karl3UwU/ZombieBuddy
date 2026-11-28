@@ -504,8 +504,8 @@ tasks.withType(Test) {
     outputs.upToDateWhen { false }
 
     jvmArgs += "-XX:+EnableDynamicAgentLoading"
-    jvmArgs += "-Dzb.filter_stacktrace=true"
-    systemProperty 'zb.verbosity', project.findProperty('zb.verbosity')
+    jvmArgs += "-Dkrl.filter_stacktrace=true"
+    systemProperty 'krl.verbosity', project.findProperty('krl.verbosity')
     
     // Don't capture stdout/stderr - show it directly in console
     testLogging {
@@ -567,7 +567,7 @@ task test_patched(type: Test) {
         def bcJar = configurations.runtimeClasspath.find { it.name.contains("bcprov") }
         if (!bcJar) throw new GradleException("bouncycastle jar not found in runtimeClasspath")
         jvmArgs "-Xbootclasspath/a:${gsonJar}${File.pathSeparator}${bcJar}"
-        jvmArgs "-javaagent:${shadowJar.archiveFile.get().asFile.absolutePath}=patches_jar=${patchesJarPath}:${patchesPackageName},config_dir=.config,prop_prefix=zb"
+        jvmArgs "-javaagent:${shadowJar.archiveFile.get().asFile.absolutePath}=patches_jar=${patchesJarPath}:${patchesPackageName},config_dir=.config,prop_prefix=krl"
     }
 }
 

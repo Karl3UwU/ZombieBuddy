@@ -67,7 +67,7 @@ public class PreMain {
 
     private static void writePortFile(int port) {
         try {
-            Path portFile = Path.of(Utils.getCacheDir(), "zbLuaAPI.txt");
+            Path portFile = Path.of(Utils.getCacheDir(), "krlLuaAPI.txt");
             Files.writeString(portFile, String.valueOf(port));
             Logger.info("Wrote random API port " + port + " to " + portFile.toAbsolutePath());
         } catch (IOException e) {

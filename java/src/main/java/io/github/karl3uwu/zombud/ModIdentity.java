@@ -27,6 +27,15 @@ public final class ModIdentity {
     /** Upstream ZombieBuddy's Java package (its {@code javaPkgName}); a mod declaring it is never loaded. */
     public static final String LEGACY_JAVA_PKG = "me.zed_0xff.zombie_buddy";
 
+    /** Default prefix for {@code prop_prefix}: {@code -Dkrl.verbosity=2} and so on. */
+    public static final String PROP_PREFIX = "krl";
+
+    /** Environment variable that overrides the {@code verbosity} argument. */
+    public static final String ENV_VERBOSITY = "KRL_VERBOSITY";
+
+    /** ZombieBuddy's name for {@link #ENV_VERBOSITY}; no longer read, only warned about. */
+    public static final String LEGACY_ENV_VERBOSITY = "ZB_VERBOSITY";
+
     public static boolean isLegacyModId(String modId) {
         return modId != null && modId.trim().equals(LEGACY_MOD_ID);
     }

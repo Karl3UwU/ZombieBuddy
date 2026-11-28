@@ -48,7 +48,11 @@ public class Agent {
             }
         }
 
-        String propPrefix = arguments.get("prop_prefix");
+        // prop_prefix=<p> copies -D<p>.key=value system properties into the arguments.
+        // A bare "prop_prefix" (no value) uses the default prefix "krl".
+        String propPrefix = arguments.containsKey("prop_prefix")
+            ? (Utils.isBlank(arguments.get("prop_prefix")) ? ModIdentity.PROP_PREFIX : arguments.get("prop_prefix").trim())
+            : null;
         if (!Utils.isBlank(propPrefix)) {
             final String propertyPrefix = propPrefix.endsWith(".") ? propPrefix : propPrefix + ".";
             // Snapshot property names to avoid ConcurrentModificationException; null values skipped.
@@ -60,6 +64,11 @@ public class Agent {
                         arguments.put(key.substring(propertyPrefix.length()), value);
                     }
                 });
+        }
+
+        // ~/.zombie_buddy -> ~/.krl_zombud, once, before anything reads the config dir.
+        if (Utils.isBlank(arguments.get("config_dir"))) {
+            ConfigDirMigration.migrate(ConfigDirMigration.legacyDefaultDir(), ConfigDirMigration.defaultDir());
         }
 
         if( arguments.containsKey("verbosity")) {
@@ -85,14 +94,14 @@ public class Agent {
         // Java mod UI: auto (default), swing (Swing batch + TinyFD per-mod), tinyfd, console (stdin/headless).
         Loader.configureApprovalFrontend(arguments.getOrDefault("frontend", ModApprovalFrontends.ARG_AUTO));
 
-        // Check ZB_VERBOSITY environment variable - it overrides command line value
-        String envVerbosity = System.getenv("ZB_VERBOSITY");
+        // KRL_VERBOSITY environment variable overrides the command-line value (Logger warns about ZB_VERBOSITY)
+        String envVerbosity = System.getenv(ModIdentity.ENV_VERBOSITY);
         if (!Utils.isBlank(envVerbosity)) {
             try {
                 ctx.verbosity = Integer.parseInt(envVerbosity);
-                Logger.info("set Loader verbosity to " + ctx.verbosity + " from ZB_VERBOSITY environment variable");
+                Logger.info("set Loader verbosity to " + ctx.verbosity + " from " + ModIdentity.ENV_VERBOSITY + " environment variable");
             } catch (NumberFormatException e) {
-                Logger.error("invalid ZB_VERBOSITY value: " + envVerbosity);
+                Logger.error("invalid " + ModIdentity.ENV_VERBOSITY + " value: " + envVerbosity);
             }
         }
 
@@ -194,7 +203,7 @@ public class Agent {
         if (configured != null && !configured.trim().isEmpty()) {
             return Path.of(configured.trim());
         }
-        return Path.of(System.getProperty("user.home"), ".zombie_buddy");
+        return ConfigDirMigration.defaultDir();
     }
 
     /** Called from Callbacks when exit_after_game_init was requested. */
