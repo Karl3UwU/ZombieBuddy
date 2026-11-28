@@ -17,9 +17,10 @@ Manual uninstall:
    - `zbNative.dll`
    - `ZombieBuddy.jar` and `ZombieBuddy.jar.new`, if left over from upstream ZombieBuddy (the installer removes these too)
 
-3. Optional: delete ZombieBuddy's config directory if you also want to remove approval decisions and caches:
-   - Default location: `%USERPROFILE%\.zombie_buddy`
-   - Usually: `C:\Users\<your username>\.zombie_buddy`
+3. Optional: delete KRL ZomBud's config directory if you also want to remove approval decisions and caches:
+   - Default location: `%USERPROFILE%\.krl_zombud`
+   - Usually: `C:\Users\<your username>\.krl_zombud`
+   - If you used an earlier build, `%USERPROFILE%\.zombie_buddy` may also exist (KRL ZomBud copies it once and leaves it in place; upstream ZombieBuddy uses it too).
 
 ## macOS / Linux
 
@@ -33,5 +34,6 @@ Manual uninstall:
    - `KRLZomBud.jar`
    - `ZombieBuddy.jar` and `ZombieBuddy.jar.new`, if left over from upstream ZombieBuddy
 
-3. Optional: delete ZombieBuddy's config directory if you also want to remove approval decisions and caches:
-   - Default location: `~/.zombie_buddy`
+3. Optional: delete KRL ZomBud's config directory if you also want to remove approval decisions and caches:
+   - Default location: `~/.krl_zombud`
+   - If you used an earlier build, `~/.zombie_buddy` may also exist (KRL ZomBud copies it once and leaves it in place; upstream ZombieBuddy uses it too).

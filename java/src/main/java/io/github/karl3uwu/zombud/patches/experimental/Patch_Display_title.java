@@ -10,8 +10,8 @@ import io.github.karl3uwu.zombud.api.Patch;
 public class Patch_Display_title {
     @Patch.OnEnter
     public static void enter(@Patch.Argument(value = 0, readOnly = false) String title) {
-        if (Agent.arguments.containsKey("window_title")) {
-            String rawTitle = Agent.arguments.get("window_title");
+        if (Agent.arguments().containsKey("window_title")) {
+            String rawTitle = Agent.arguments().get("window_title");
             try {
                 title = URLDecoder.decode(rawTitle, StandardCharsets.UTF_8);
             } catch (IllegalArgumentException e) {

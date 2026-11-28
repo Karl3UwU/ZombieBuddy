@@ -21,8 +21,8 @@ public class Patch_LuaManager {
             Callbacks.afterLuaInit.run();
             if (!isInitialized) {
                 isInitialized = true;
-                if (Agent.arguments.containsKey("lua_init_script")) {
-                    String initScript = Agent.arguments.get("lua_init_script");
+                if (Agent.arguments().containsKey("lua_init_script")) {
+                    String initScript = Agent.arguments().get("lua_init_script");
                     Logger.info("Running init script: " + initScript);
                     LuaManager.RunLua(initScript);
                 }

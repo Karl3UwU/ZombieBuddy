@@ -13,7 +13,7 @@ import java.util.Objects;
 import com.google.gson.annotations.SerializedName;
 
 /**
- * Persistent Java-mod JAR allow/deny decisions under {@code ~/.zombie_buddy/}.
+ * Persistent Java-mod JAR allow/deny decisions under {@code ~/.krl_zombud/}.
  * JSON shape:
  * {
  *   "formatVersion": 2,

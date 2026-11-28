@@ -18,11 +18,13 @@ The names are defined once per language: `ModIdentity` (Java), `MOD_ID` in `java
 `c/windows/zbNative.c` and `KRL_MOD_ID` in `installer/installer.go`. Keep them in sync.
 
 Also renamed: the Java package (`io.github.karl3uwu.zombud`, public API in `.api`), the `KRLVersionMin`/`KRLVersionMax`
-`mod.info` keys, the `KRL-Preload` manifest attribute and the `KRLZomBud` Lua global. ZombieBuddy's 2.x→3.x
-annotation compatibility step is removed.
+`mod.info` keys, the `KRL-Preload` manifest attribute, the `KRLZomBud` Lua global, the config directory
+(`~/.krl_zombud`, copied once from `~/.zombie_buddy`), the `KRL_VERBOSITY` environment variable, the `krl`
+system-property prefix and the experimental `krlLuaAPI.txt` port file. ZombieBuddy's 2.x→3.x annotation
+compatibility step is removed.
 
-Not changed yet: the `~/.zombie_buddy` config directory, the `ZB_VERBOSITY` environment variable and `zb.*` system
-properties, `.zbs` signature files, and the Mod Options id (`ZombieBuddy`, which keys saved option values).
+Kept on purpose: `.zbs` signature files and their signed payload prefixes, the Mod Options id (`ZombieBuddy`, which
+keys saved option values), the experimental `zb*` debug globals and the `X-ZombieBuddy-Error-Globals` HTTP header.
 
 ## Updating a mod built for ZombieBuddy
 

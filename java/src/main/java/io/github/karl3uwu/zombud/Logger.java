@@ -37,16 +37,25 @@ public class Logger {
 
     // should be after DEFAULT declaration bc static fields and static {} blocks execute strictly in source order.
     static {
-        String envVerbosity = System.getenv("ZB_VERBOSITY");
+        String envVerbosity = envVerbosity();
         if (!Utils.isBlank(envVerbosity)) {
             try {
                 var verbosityInt = Integer.parseInt(envVerbosity);
                 Logger.setLevel(verbosityInt);
-                Logger.info("set Logger verbosity to " + verbosityInt + " from ZB_VERBOSITY environment variable");
+                Logger.info("set Logger verbosity to " + verbosityInt + " from " + ModIdentity.ENV_VERBOSITY + " environment variable");
             } catch (NumberFormatException e) {
-                Logger.error("invalid ZB_VERBOSITY value: " + envVerbosity);
+                Logger.error("invalid " + ModIdentity.ENV_VERBOSITY + " value: " + envVerbosity);
             }
         }
+    }
+
+    /** Value of {@code KRL_VERBOSITY}; warns if only ZombieBuddy's {@code ZB_VERBOSITY} is set. */
+    static String envVerbosity() {
+        String value = System.getenv(ModIdentity.ENV_VERBOSITY);
+        if (Utils.isBlank(value) && !Utils.isBlank(System.getenv(ModIdentity.LEGACY_ENV_VERBOSITY))) {
+            Logger.warn(ModIdentity.LEGACY_ENV_VERBOSITY + " is set but no longer read; use " + ModIdentity.ENV_VERBOSITY);
+        }
+        return value;
     }
 
     public static class Instance {
@@ -167,7 +176,7 @@ public class Logger {
     }
 
     public static void printStackTrace(Throwable t, int maxFrames) {
-        boolean bFilter = Agent.arguments.containsKey("filter_stacktrace"); // undocumented; intentionally omitted from CommandLine.md
+        boolean bFilter = Agent.arguments().containsKey("filter_stacktrace"); // undocumented; intentionally omitted from CommandLine.md
         if (!bFilter && maxFrames < 0) {
             t.printStackTrace();
             return;

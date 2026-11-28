@@ -42,7 +42,7 @@ Controls the amount of logging output.
 -javaagent:KRLZomBud.jar=verbosity=2 --
 ```
 
-Can also be set via the `ZB_VERBOSITY` environment variable (overrides the command-line value).
+Can also be set via the `KRL_VERBOSITY` environment variable (overrides the command-line value). ZombieBuddy's `ZB_VERBOSITY` is no longer read; a warning is logged if only it is set.
 
 ---
 
@@ -140,26 +140,28 @@ Time-to-live in seconds for the in-memory HTTP response cache. Applies to all ou
 
 ### config_dir
 
-Directory used for ZombieBuddy configuration and cache files. Defaults to `~/.zombie_buddy`.
+Directory used for KRL ZomBud configuration and cache files. Defaults to `~/.krl_zombud`.
+
+On the first start without `config_dir`, if `~/.krl_zombud` doesn't exist and `~/.zombie_buddy` does, the old directory is copied to `~/.krl_zombud`. The old directory is never changed or deleted.
 
 **Example:**
 
 ```
--javaagent:KRLZomBud.jar=config_dir=/path/to/zombie_buddy_config --
+-javaagent:KRLZomBud.jar=config_dir=/path/to/krl_zombud_config --
 ```
 
 ---
 
 ### prop_prefix
 
-Import JVM system properties into ZombieBuddy agent arguments. When set, any system property whose name starts with this prefix plus `.` is read, the prefix and dot are stripped, and the remaining name becomes a ZombieBuddy argument.
+Import JVM system properties into KRL ZomBud agent arguments. When set, any system property whose name starts with this prefix plus `.` is read, the prefix and dot are stripped, and the remaining name becomes an agent argument. A bare `prop_prefix` without a value uses the prefix `krl`.
 
-If `prop_prefix` is not specified, ZombieBuddy does not read system properties into agent arguments.
+If `prop_prefix` is not specified, KRL ZomBud does not read system properties into agent arguments.
 
 **Example:**
 
 ```
--Dzb.verbosity=2 -Dzb.policy=deny-new -javaagent:KRLZomBud.jar=prop_prefix=zb --
+-Dkrl.verbosity=2 -Dkrl.policy=deny-new -javaagent:KRLZomBud.jar=prop_prefix=krl --
 ```
 
 This is equivalent to:
@@ -246,4 +248,4 @@ Windows example:
 
 | Variable | Description |
 |----------|-------------|
-| `ZB_VERBOSITY` | Sets verbosity level (overrides command-line `verbosity` parameter) |
+| `KRL_VERBOSITY` | Sets verbosity level (overrides command-line `verbosity` parameter). Replaces ZombieBuddy's `ZB_VERBOSITY`, which is no longer read. |

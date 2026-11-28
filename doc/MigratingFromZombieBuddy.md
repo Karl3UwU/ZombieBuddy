@@ -87,6 +87,23 @@ The experimental debug globals (`zbinspect`, `zbmethods`, `zbgrep`, `zbmap` and 
 [DevDebugFunctions.md](DevDebugFunctions.md)) keep their names. The Mod Options id stays `ZombieBuddy` so saved option
 values carry over.
 
+### Config directory, environment and launch options
+
+These affect players and tooling, not mod code.
+
+| ZombieBuddy | KRL ZomBud |
+|---|---|
+| `~/.zombie_buddy` (config, approvals, caches) | `~/.krl_zombud` |
+| `ZB_VERBOSITY` environment variable | `KRL_VERBOSITY` |
+| `-Dzb.<arg>=...` with `prop_prefix=zb` (the documented example) | `-Dkrl.<arg>=...` with `prop_prefix=krl` (or a bare `prop_prefix`) |
+| `zbLuaAPI.txt` port file (experimental HTTP API) | `krlLuaAPI.txt` |
+
+On the first start without `config_dir`, if `~/.krl_zombud` doesn't exist and `~/.zombie_buddy` does, KRL ZomBud
+copies the old directory over, so approval decisions, trusted authors and preload settings carry over. The old
+directory is never changed or deleted. `ZB_VERBOSITY` is not read; a warning is logged if it is set without
+`KRL_VERBOSITY`. `prop_prefix` still reads whatever prefix you pass, so `prop_prefix=zb` keeps working if you set it
+explicitly.
+
 ### Your own `@Exposer.LuaClass` names
 
 If you named your Lua table under ZombieBuddy's (e.g. `@Exposer.LuaClass(name = "ZombieBuddy.MyMod")`), move it to
